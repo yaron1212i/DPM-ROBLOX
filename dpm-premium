@@ -1,6 +1,7 @@
 -- ╔══════════════════════════════════════╗
 -- ║          DPM — PREMIUM              ║
 -- ║             made by DPM             ║
+-- ║         EXPANDED EDITION            ║
 -- ╚══════════════════════════════════════╝
 
 local Players          = game:GetService("Players")
@@ -8,6 +9,10 @@ local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
 local Lighting         = game:GetService("Lighting")
+local HttpService      = game:GetService("HttpService")
+local StarterGui       = game:GetService("StarterGui")
+local SoundService     = game:GetService("SoundService")
+local ReplicatedStorage= game:GetService("ReplicatedStorage")
 
 local LP  = Players.LocalPlayer
 local Cam = workspace.CurrentCamera
@@ -106,14 +111,12 @@ MF.ClipsDescendants      = true
 MF.Parent                = SG
 Instance.new("UICorner", MF).CornerRadius = UDim.new(0, 16)
 
--- outer glow stroke
 local MFStroke = Instance.new("UIStroke")
 MFStroke.Color       = Color3.new(1,1,1)
 MFStroke.Thickness   = 1.2
 MFStroke.Transparency= 0.6
 MFStroke.Parent      = MF
 
--- inner glass gradient
 local MFGrad = Instance.new("UIGradient")
 MFGrad.Color    = ColorSequence.new({
     ColorSequenceKeypoint.new(0,   Color3.fromRGB(38, 38, 48)),
@@ -123,7 +126,6 @@ MFGrad.Color    = ColorSequence.new({
 MFGrad.Rotation = 145
 MFGrad.Parent   = MF
 
--- animated border pulse
 task.spawn(function()
     local t = 0
     while MF and MF.Parent do
@@ -132,11 +134,10 @@ task.spawn(function()
     end
 end)
 
--- entrance animation
 animateIn(MF, UDim2.new(0,340,0,410), UDim2.new(0.5,-170,0.5,-205))
 
 -- =============================================
---  TOP GLOW BAR (decorative)
+--  TOP GLOW BAR
 -- =============================================
 local TopGlow = Instance.new("Frame")
 TopGlow.Size             = UDim2.new(1,0,0,2)
@@ -202,7 +203,6 @@ TBSep.BorderSizePixel  = 0
 TBSep.ZIndex           = 7
 TBSep.Parent           = TB
 
--- animated dot trio (like mac traffic lights but white)
 local dotFrame = Instance.new("Frame")
 dotFrame.Size             = UDim2.new(0,40,0,8)
 dotFrame.Position         = UDim2.new(0,12,0.5,-4)
@@ -225,7 +225,6 @@ for i=1,3 do
     d.ZIndex           = 8
     d.Parent           = dotFrame
     Instance.new("UICorner",d).CornerRadius = UDim.new(1,0)
-
     task.spawn(function()
         local t = i * 0.6
         while d and d.Parent do
@@ -268,7 +267,6 @@ SubLbl.TextXAlignment     = Enum.TextXAlignment.Left
 SubLbl.ZIndex             = 7
 SubLbl.Parent             = TB
 
--- minimize
 local MinBtn = Instance.new("TextButton")
 MinBtn.Text             = "─"
 MinBtn.Size             = UDim2.new(0,24,0,24)
@@ -285,7 +283,6 @@ Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0,6)
 local MinStroke = Instance.new("UIStroke")
 MinStroke.Color=Color3.new(1,1,1); MinStroke.Thickness=0.8; MinStroke.Transparency=0.7; MinStroke.Parent=MinBtn
 
--- close
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Text             = "✕"
 CloseBtn.Size             = UDim2.new(0,24,0,24)
@@ -319,7 +316,6 @@ CloseBtn.MouseButton1Click:Connect(function()
     task.delay(0.35, function() SG:Destroy() end)
 end)
 
--- hover effects on buttons
 for _,btn in pairs({MinBtn, CloseBtn}) do
     btn.MouseEnter:Connect(function()
         TweenService:Create(btn, TweenInfo.new(0.15),{BackgroundTransparency=0}):Play()
@@ -367,7 +363,7 @@ UserInputService.InputChanged:Connect(function(i)
 end)
 
 -- =============================================
---  TAB BAR — scrollable, glass
+--  TAB BAR
 -- =============================================
 local TabBarOuter = Instance.new("Frame")
 TabBarOuter.Size             = UDim2.new(1,0,0,34)
@@ -409,7 +405,6 @@ local TabPad=Instance.new("UIPadding")
 TabPad.PaddingLeft=UDim.new(0,5); TabPad.PaddingRight=UDim.new(0,5)
 TabPad.Parent=TabScroll
 
--- tab indicator line (slides under active tab)
 local TabIndicator = Instance.new("Frame")
 TabIndicator.Size             = UDim2.new(0,38,0,2)
 TabIndicator.Position         = UDim2.new(0,5,1,-2)
@@ -432,17 +427,24 @@ ContentArea.BorderSizePixel=0
 ContentArea.Parent=MF
 
 -- =============================================
---  TAB DEFINITIONS
+--  TAB DEFINITIONS — EXPANDED
 -- =============================================
 local tabDefs = {
-    {id="GENERAL",label="GEN"},
-    {id="MOVE",   label="MOVE"},
-    {id="COMBAT", label="CMB"},
-    {id="VISUAL", label="VIS"},
-    {id="WORLD",  label="WLD"},
-    {id="PLAYER", label="PLYR"},
-    {id="GAME",   label="GAME"},
-    {id="FUN",    label="FUN"},
+    {id="GENERAL", label="GEN"},
+    {id="MOVE",    label="MOVE"},
+    {id="COMBAT",  label="CMB"},
+    {id="VISUAL",  label="VIS"},
+    {id="WORLD",   label="WLD"},
+    {id="PLAYER",  label="PLYR"},
+    {id="TROLL",   label="TRL"},
+    {id="CAMERA",  label="CAM"},
+    {id="SPEED",   label="SPD"},
+    {id="TELEPORT",label="TP"},
+    {id="EXPLOIT", label="EXP"},
+    {id="SOUND",   label="SND"},
+    {id="LIGHTING",label="LGT"},
+    {id="GAME",    label="GAME"},
+    {id="FUN",     label="FUN"},
 }
 
 local tabs  = {}
@@ -505,22 +507,16 @@ for _,def in ipairs(tabDefs) do
                 TextColor3=T.dim,
             }):Play()
         end
-
         pages[id].page.Visible=true
-
         TweenService:Create(btn,TweenInfo.new(0.18),{
             BackgroundColor3=T.tabOn,
             BackgroundTransparency=0,
             TextColor3=Color3.fromRGB(10,10,14),
         }):Play()
-
-        -- slide indicator
         TweenService:Create(TabIndicator, TweenInfo.new(0.22, Enum.EasingStyle.Quart),{
             Position=UDim2.new(0, btn.AbsolutePosition.X - TabBarOuter.AbsolutePosition.X, 1, -2),
             Size=UDim2.new(0, btn.AbsoluteSize.X, 0, 2),
         }):Play()
-
-        -- page slide-in
         page.Position=UDim2.new(0.04,0,0,0)
         TweenService:Create(page,TweenInfo.new(0.22,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{
             Position=UDim2.new(0,0,0,0)
@@ -537,7 +533,7 @@ tabs["GENERAL"].BackgroundTransparency=0
 tabs["GENERAL"].TextColor3=Color3.fromRGB(10,10,14)
 
 -- =============================================
---  TOGGLE HELPER — glass cards
+--  TOGGLE HELPER
 -- =============================================
 local function toggle(tabId,name,desc,cb)
     local entry=pages[tabId]
@@ -545,7 +541,6 @@ local function toggle(tabId,name,desc,cb)
     entry.count=entry.count+1
     local col=(entry.count%2==1) and entry.left or entry.right
 
-    -- CARD
     local card=Instance.new("Frame")
     card.Name=name; card.Size=UDim2.new(1,0,0,58)
     card.BackgroundColor3=T.glassCard
@@ -554,7 +549,6 @@ local function toggle(tabId,name,desc,cb)
     card.LayoutOrder=entry.count; card.ZIndex=3; card.Parent=col
     Instance.new("UICorner",card).CornerRadius=UDim.new(0,10)
 
-    -- card glass gradient
     local cGrad=Instance.new("UIGradient")
     cGrad.Color=ColorSequence.new({
         ColorSequenceKeypoint.new(0, Color3.fromRGB(38,38,48)),
@@ -562,12 +556,10 @@ local function toggle(tabId,name,desc,cb)
     })
     cGrad.Rotation=135; cGrad.Parent=card
 
-    -- card border
     local cStroke=Instance.new("UIStroke")
     cStroke.Color=Color3.new(1,1,1); cStroke.Thickness=0.8
     cStroke.Transparency=0.82; cStroke.Parent=card
 
-    -- top shimmer line
     local shimmer=Instance.new("Frame")
     shimmer.Size=UDim2.new(0.6,0,0,1)
     shimmer.Position=UDim2.new(0.2,0,0,0)
@@ -590,7 +582,6 @@ local function toggle(tabId,name,desc,cb)
     ds.TextXAlignment=Enum.TextXAlignment.Left
     ds.TextTruncate=Enum.TextTruncate.AtEnd; ds.ZIndex=4; ds.Parent=card
 
-    -- PILL
     local pillBG=Instance.new("Frame")
     pillBG.Size=UDim2.new(0,32,0,17); pillBG.Position=UDim2.new(0,8,1,-24)
     pillBG.BackgroundColor3=T.dimDark; pillBG.BackgroundTransparency=0.3
@@ -607,7 +598,6 @@ local function toggle(tabId,name,desc,cb)
     knob.BorderSizePixel=0; knob.ZIndex=5; knob.Parent=pillBG
     Instance.new("UICorner",knob).CornerRadius=UDim.new(1,0)
 
-    -- knob glow (hidden when off)
     local knobGlow=Instance.new("UIStroke")
     knobGlow.Color=Color3.new(1,1,1); knobGlow.Thickness=1.5
     knobGlow.Transparency=1; knobGlow.Parent=knob
@@ -622,7 +612,6 @@ local function toggle(tabId,name,desc,cb)
     btn.Size=UDim2.new(1,0,1,0); btn.BackgroundTransparency=1
     btn.Text=""; btn.ZIndex=5; btn.Parent=card
 
-    -- ripple on press
     local function ripple()
         local rip=Instance.new("Frame")
         rip.Size=UDim2.new(0,0,0,0); rip.AnchorPoint=Vector2.new(0.5,0.5)
@@ -642,7 +631,6 @@ local function toggle(tabId,name,desc,cb)
         ripple()
         local ti=TweenInfo.new(0.22,Enum.EasingStyle.Back,Enum.EasingDirection.Out)
         local tiF=TweenInfo.new(0.18,Enum.EasingStyle.Quad)
-
         if state then
             TweenService:Create(pillBG,    tiF,{BackgroundColor3=Color3.new(1,1,1),BackgroundTransparency=0}):Play()
             TweenService:Create(pillStroke,tiF,{Transparency=1}):Play()
@@ -667,7 +655,6 @@ local function toggle(tabId,name,desc,cb)
         cb(state)
     end)
 
-    -- card entrance stagger
     card.BackgroundTransparency=1
     task.delay(entry.count*0.04,function()
         TweenService:Create(card,TweenInfo.new(0.3,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
@@ -762,19 +749,16 @@ toggle("GENERAL","Crosshair","glass dot at screen center",function(on)
         local wrap=Instance.new("Frame"); wrap.Name="_dpmCH"
         wrap.Size=UDim2.new(0,20,0,20); wrap.Position=UDim2.new(0.5,-10,0.5,-10)
         wrap.BackgroundTransparency=1; wrap.BorderSizePixel=0; wrap.Parent=SG
-
         local ch=Instance.new("Frame"); ch.Size=UDim2.new(0,8,0,8)
         ch.Position=UDim2.new(0.5,-4,0.5,-4)
         ch.BackgroundColor3=Color3.new(1,1,1); ch.BackgroundTransparency=0.25
         ch.BorderSizePixel=0; ch.Parent=wrap
         Instance.new("UICorner",ch).CornerRadius=UDim.new(1,0)
-
         local ring=Instance.new("Frame"); ring.Size=UDim2.new(1,0,1,0)
         ring.BackgroundTransparency=1; ring.BorderSizePixel=0; ring.Parent=wrap
         Instance.new("UICorner",ring).CornerRadius=UDim.new(1,0)
         local rs=Instance.new("UIStroke"); rs.Color=Color3.new(1,1,1)
         rs.Thickness=1; rs.Transparency=0.6; rs.Parent=ring
-
         task.spawn(function()
             local t=0
             while wrap and wrap.Parent do
@@ -807,6 +791,74 @@ toggle("GENERAL","Auto Rejoin","rejoin on death",function(on)
     end)
 end)
 
+toggle("GENERAL","Player List ESP","distance + team shown",function(on)
+    task.spawn(function()
+        while on do
+            for _,p in pairs(Players:GetPlayers()) do
+                if p~=LP and p.Character then
+                    local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp and Root then
+                        local dist=math.floor((hrp.Position-Root.Position).Magnitude)
+                        print(string.format("[DPM] %s | %dst | Team: %s",p.Name,dist,tostring(p.Team)))
+                    end
+                end
+            end
+            task.wait(3)
+        end
+    end)
+end)
+
+toggle("GENERAL","Tracers","line from center to players",function(on)
+    RunService.RenderStepped:Connect(function()
+        local ex=SG:FindFirstChild("_dpmTracers"); if ex then ex:Destroy() end
+        if not on then return end
+        local wrap=Instance.new("Frame"); wrap.Name="_dpmTracers"
+        wrap.Size=UDim2.new(1,0,1,0); wrap.BackgroundTransparency=1
+        wrap.BorderSizePixel=0; wrap.Parent=SG
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local pos,vis=Cam:WorldToViewportPoint(hrp.Position)
+                    if vis then
+                        local cx=Cam.ViewportSize.X/2; local cy=Cam.ViewportSize.Y
+                        local dx=pos.X-cx; local dy=pos.Y-cy
+                        local len=math.sqrt(dx*dx+dy*dy)
+                        local ang=math.atan2(dy,dx)
+                        local line=Instance.new("Frame")
+                        line.Size=UDim2.new(0,len,0,1)
+                        line.Position=UDim2.new(0,cx,0,cy)
+                        line.AnchorPoint=Vector2.new(0,0.5)
+                        line.Rotation=math.deg(ang)
+                        line.BackgroundColor3=Color3.new(1,1,1)
+                        line.BackgroundTransparency=0.4
+                        line.BorderSizePixel=0; line.Parent=wrap
+                    end
+                end
+            end
+        end
+    end)
+end)
+
+toggle("GENERAL","Notify Deaths","chat notif on kill",function(on)
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP then
+            local hum=p.Character and p.Character:FindFirstChild("Humanoid")
+            if hum then
+                hum.Died:Connect(function()
+                    if on then
+                        StarterGui:SetCore("ChatMakeSystemMessage",{
+                            Text="[DPM] "..p.Name.." died",
+                            Color=Color3.new(1,1,1),
+                            Font=Enum.Font.GothamBold,
+                        })
+                    end
+                end)
+            end
+        end
+    end
+end)
+
 -- =============================================
 --  MOVE TAB
 -- =============================================
@@ -818,6 +870,12 @@ toggle("MOVE","Speed x6","6× walk speed",function(on)
 end)
 toggle("MOVE","Speed x10","ultra fast",function(on)
     RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 160 or 16 end end)
+end)
+toggle("MOVE","Speed x20","sonic mode",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 320 or 16 end end)
+end)
+toggle("MOVE","Speed x50","server lag inducer",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 800 or 16 end end)
 end)
 
 local ijOn=false
@@ -842,6 +900,9 @@ end)
 toggle("MOVE","Fast Fall","slam to ground",function(on)
     workspace.Gravity=on and 650 or 196.2
 end)
+toggle("MOVE","Zero Gravity","weightless float",function(on)
+    workspace.Gravity=on and 0.1 or 196.2
+end)
 toggle("MOVE","Bunny Hop","auto-jump on land",function(on)
     RunService.Heartbeat:Connect(function()
         if on and Hum and Hum:GetState()==Enum.HumanoidStateType.Landed then
@@ -849,32 +910,41 @@ toggle("MOVE","Bunny Hop","auto-jump on land",function(on)
         end
     end)
 end)
-toggle("MOVE","Double-Tap TP","double-tap to teleport",function(on)
-    local conn,last=nil,0
-    if on then
-        conn=UserInputService.TouchTap:Connect(function(pos)
-            local now=tick()
-            if now-last<0.4 then
-                local ray=Cam:ScreenPointToRay(pos[1].X,pos[1].Y)
-                local res=workspace:Raycast(ray.Origin,ray.Direction*500,RaycastParams.new())
-                if res and Root then Root.CFrame=CFrame.new(res.Position+Vector3.new(0,3,0)) end
-            end
-            last=now
-        end)
-    elseif conn then conn:Disconnect() end
-end)
-toggle("MOVE","Click TP","single tap to teleport",function(on)
-    local conn
-    if on then
-        conn=UserInputService.TouchTap:Connect(function(pos)
-            local ray=Cam:ScreenPointToRay(pos[1].X,pos[1].Y)
-            local res=workspace:Raycast(ray.Origin,ray.Direction*500,RaycastParams.new())
-            if res and Root then Root.CFrame=CFrame.new(res.Position+Vector3.new(0,3,0)) end
-        end)
-    elseif conn then conn:Disconnect() end
-end)
 toggle("MOVE","Auto Sprint","always at sprint speed",function(on)
     RunService.Heartbeat:Connect(function() if on and Hum then Hum.WalkSpeed=28 end end)
+end)
+toggle("MOVE","Swim In Air","water state airborne",function(on)
+    RunService.Heartbeat:Connect(function()
+        if on and Hum then Hum:ChangeState(Enum.HumanoidStateType.Swimming) end
+    end)
+end)
+toggle("MOVE","Slide Mode","zero friction walk",function(on)
+    if Root then
+        local p=Root:FindFirstChild("_dpmSlide")
+        if on then
+            local bp=Instance.new("BodyPosition"); bp.Name="_dpmSlide"
+            bp.MaxForce=Vector3.new(0,0,0); bp.Parent=Root
+        else if p then p:Destroy() end end
+    end
+end)
+toggle("MOVE","Backwards Walk","inverts movement",function(on)
+    RunService.Heartbeat:Connect(function()
+        if on and Root then Root.CFrame=Root.CFrame*CFrame.new(0,0,0.3) end
+    end)
+end)
+toggle("MOVE","Step Teleport","each step = teleport fwd",function(on)
+    RunService.Heartbeat:Connect(function()
+        if on and Root and Hum and Hum.MoveDirection.Magnitude>0 then
+            Root.CFrame=Root.CFrame*CFrame.new(0,0,-2.5)
+        end
+    end)
+end)
+toggle("MOVE","Moonwalk","slide backward stylishly",function(on)
+    RunService.Heartbeat:Connect(function()
+        if on and Root and Hum and Hum.MoveDirection.Magnitude>0 then
+            Root.CFrame=Root.CFrame*CFrame.new(0,0,1.5)
+        end
+    end)
 end)
 
 local flyOn=false; local flyBV,flyBG; local flyDir=Vector3.zero
@@ -892,15 +962,14 @@ toggle("MOVE","Fly","freefly — d-pad appears",function(on)
     end
 end)
 
+local FlyHUD=Instance.new("Frame")
+FlyHUD.Size=UDim2.new(0,162,0,122); FlyHUD.Position=UDim2.new(1,-176,1,-140)
+FlyHUD.BackgroundTransparency=1; FlyHUD.Visible=false; FlyHUD.Parent=SG
+
 RunService.RenderStepped:Connect(function()
     if flyOn and flyBV then flyBV.Velocity=flyDir*55; flyBG.CFrame=Cam.CFrame end
     FlyHUD.Visible=flyOn
 end)
-
--- glass fly hud
-FlyHUD=Instance.new("Frame")
-FlyHUD.Size=UDim2.new(0,162,0,122); FlyHUD.Position=UDim2.new(1,-176,1,-140)
-FlyHUD.BackgroundTransparency=1; FlyHUD.Visible=false; FlyHUD.Parent=SG
 
 local function mFB(lbl,x,y,w,h,dir)
     local b=Instance.new("TextButton")
@@ -936,10 +1005,153 @@ local function mFB(lbl,x,y,w,h,dir)
 end
 mFB("↑",55,0,48,48,Vector3.new(0,0,-1))
 mFB("↓",55,52,48,48,Vector3.new(0,0,1))
-mFB("2",2,26,48,48,Vector3.new(-1,0,0))
+mFB("←",2,26,48,48,Vector3.new(-1,0,0))
 mFB("→",108,26,48,48,Vector3.new(1,0,0))
 mFB("▲",2,90,74,28,Vector3.new(0,1,0))
 mFB("▼",84,90,74,28,Vector3.new(0,-1,0))
+
+-- =============================================
+--  SPEED TAB (dedicated)
+-- =============================================
+local customSpeed = 16
+toggle("SPEED","Speed x2","32 ws",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 32 or 16 end end)
+end)
+toggle("SPEED","Speed x4","64 ws",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 64 or 16 end end)
+end)
+toggle("SPEED","Speed x8","128 ws",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 128 or 16 end end)
+end)
+toggle("SPEED","Speed x15","240 ws",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 240 or 16 end end)
+end)
+toggle("SPEED","Speed x25","400 ws",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 400 or 16 end end)
+end)
+toggle("SPEED","Speed x100","1600 ws pure chaos",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 1600 or 16 end end)
+end)
+toggle("SPEED","Jump x3","triple jump height",function(on)
+    if Hum then Hum.JumpPower=on and 150 or 50 end
+end)
+toggle("SPEED","Jump x5","massive air",function(on)
+    if Hum then Hum.JumpPower=on and 250 or 50 end
+end)
+toggle("SPEED","Jump x10","to the moon",function(on)
+    if Hum then Hum.JumpPower=on and 500 or 50 end
+end)
+toggle("SPEED","HyperJump x20","escape velocity",function(on)
+    if Hum then Hum.JumpPower=on and 1000 or 50 end
+end)
+toggle("SPEED","Swim Speed x5","fast in water",function(on)
+    if Hum then Hum.WalkSpeed=on and 80 or 16 end
+end)
+toggle("SPEED","Climb Speed x5","fast on ladders",function(on)
+    if Hum then Hum.WalkSpeed=on and 80 or 16 end
+end)
+
+-- =============================================
+--  TELEPORT TAB
+-- =============================================
+toggle("TELEPORT","Double-Tap TP","double-tap to teleport",function(on)
+    local conn,last=nil,0
+    if on then
+        conn=UserInputService.TouchTap:Connect(function(pos)
+            local now=tick()
+            if now-last<0.4 then
+                local ray=Cam:ScreenPointToRay(pos[1].X,pos[1].Y)
+                local res=workspace:Raycast(ray.Origin,ray.Direction*500,RaycastParams.new())
+                if res and Root then Root.CFrame=CFrame.new(res.Position+Vector3.new(0,3,0)) end
+            end
+            last=now
+        end)
+    elseif conn then conn:Disconnect() end
+end)
+toggle("TELEPORT","Click TP","single tap to teleport",function(on)
+    local conn
+    if on then
+        conn=UserInputService.TouchTap:Connect(function(pos)
+            local ray=Cam:ScreenPointToRay(pos[1].X,pos[1].Y)
+            local res=workspace:Raycast(ray.Origin,ray.Direction*500,RaycastParams.new())
+            if res and Root then Root.CFrame=CFrame.new(res.Position+Vector3.new(0,3,0)) end
+        end)
+    elseif conn then conn:Disconnect() end
+end)
+toggle("TELEPORT","TP to Spawn","teleport to spawn point",function(on)
+    if on then
+        local spawn=workspace:FindFirstChildOfClass("SpawnLocation")
+        if spawn and Root then Root.CFrame=CFrame.new(spawn.Position+Vector3.new(0,5,0)) end
+    end
+end)
+toggle("TELEPORT","TP Center","go to map center 0,0,0",function(on)
+    if on and Root then Root.CFrame=CFrame.new(0,50,0) end
+end)
+toggle("TELEPORT","TP to Random","random player teleport",function(on)
+    if on then
+        local others={}
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                table.insert(others,p)
+            end
+        end
+        if #others>0 then
+            local pick=others[math.random(#others)]
+            Root.CFrame=pick.Character.HumanoidRootPart.CFrame+Vector3.new(0,5,0)
+        end
+    end
+end)
+toggle("TELEPORT","Follow Player 1","follow first other player",function(on)
+    RunService.Heartbeat:Connect(function()
+        if not on or not Root then return end
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then Root.CFrame=hrp.CFrame+Vector3.new(3,0,3) return end
+            end
+        end
+    end)
+end)
+toggle("TELEPORT","TP High Above","go 500 studs up",function(on)
+    if on and Root then Root.CFrame=CFrame.new(Root.Position+Vector3.new(0,500,0)) end
+end)
+toggle("TELEPORT","TP Behind Enemy","snap behind closest foe",function(on)
+    if not on or not Root then return end
+    local best,bd=nil,math.huge
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP and p.Character then
+            local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                local d=(hrp.Position-Root.Position).Magnitude
+                if d<bd then bd=d; best=hrp end
+            end
+        end
+    end
+    if best then Root.CFrame=best.CFrame*CFrame.new(0,0,3) end
+end)
+toggle("TELEPORT","Loop Orbit","orbit around nearest player",function(on)
+    local angle=0
+    RunService.Heartbeat:Connect(function()
+        if not on or not Root then return end
+        local best,bd=nil,math.huge
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local d=(hrp.Position-Root.Position).Magnitude
+                    if d<bd then bd=d; best=hrp end
+                end
+            end
+        end
+        if best then
+            angle=angle+0.05
+            local r=8
+            Root.CFrame=CFrame.new(
+                best.Position+Vector3.new(math.cos(angle)*r,2,math.sin(angle)*r),
+                best.Position)
+        end
+    end)
+end)
 
 -- =============================================
 --  COMBAT TAB
@@ -1007,6 +1219,18 @@ toggle("COMBAT","Kill Aura 20st","auto-kill wide range",function(on)
         end
     end)
 end)
+toggle("COMBAT","Kill Aura 50st","server wide kill",function(on)
+    RunService.Heartbeat:Connect(function()
+        if not on or not Root then return end
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                local hum=p.Character:FindFirstChild("Humanoid")
+                if hrp and hum and (hrp.Position-Root.Position).Magnitude<50 then hum.Health=0 end
+            end
+        end
+    end)
+end)
 toggle("COMBAT","Anti Knockback","roots your character",function(on)
     if Root then Root.Anchored=on end
 end)
@@ -1054,6 +1278,65 @@ toggle("COMBAT","Freeze Others","anchors all enemies",function(on)
             end
         end
     end
+end)
+toggle("COMBAT","Infinite Ammo","sets tool ammo high",function(on)
+    RunService.Heartbeat:Connect(function()
+        if not on or not Char then return end
+        for _,t in pairs(Char:GetChildren()) do
+            if t:IsA("Tool") then
+                for _,v in pairs(t:GetDescendants()) do
+                    if v:IsA("IntValue") and (v.Name:lower():find("ammo") or v.Name:lower():find("bullet")) then
+                        v.Value=999
+                    end
+                end
+            end
+        end
+    end)
+end)
+toggle("COMBAT","Rapid Fire","tool fires faster",function(on)
+    RunService.Heartbeat:Connect(function()
+        if not on or not Char then return end
+        for _,t in pairs(Char:GetChildren()) do
+            if t:IsA("Tool") then
+                for _,v in pairs(t:GetDescendants()) do
+                    if v:IsA("NumberValue") and v.Name:lower():find("cooldown") then
+                        v.Value=on and 0.01 or 0.5
+                    end
+                end
+            end
+        end
+    end)
+end)
+toggle("COMBAT","Silent Aim","no bullet offset",function(on) _G.dpm_sa=on end)
+toggle("COMBAT","Anti Aim","spin head randomly",function(on)
+    RunService.Heartbeat:Connect(function()
+        if on and Root then
+            Root.CFrame=Root.CFrame*CFrame.Angles(0,math.rad(math.random(0,360)),0)
+        end
+    end)
+end)
+toggle("COMBAT","Orbit Attack","spin around target",function(on)
+    local angle=0
+    RunService.Heartbeat:Connect(function()
+        if not on or not Root then return end
+        local best,bd=nil,math.huge
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                local hum=p.Character:FindFirstChild("Humanoid")
+                if hrp and hum and hum.Health>0 then
+                    local d=(hrp.Position-Root.Position).Magnitude
+                    if d<bd then bd=d; best=hrp end
+                end
+            end
+        end
+        if best then
+            angle=angle+0.12
+            Root.CFrame=CFrame.new(
+                best.Position+Vector3.new(math.cos(angle)*5,1,math.sin(angle)*5),
+                best.Position)
+        end
+    end)
 end)
 
 -- =============================================
@@ -1120,6 +1403,75 @@ toggle("VISUAL","Player Outlines","rainbow outline enemies",function(on)
         end
     end)
 end)
+toggle("VISUAL","Huge Hitboxes","expand enemy parts x4",function(on)
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP and p.Character then
+            for _,pt in pairs(p.Character:GetDescendants()) do
+                if pt:IsA("BasePart") then
+                    pt.Size=on and pt.Size*4 or pt.Size/4
+                end
+            end
+        end
+    end
+end)
+toggle("VISUAL","Neon Players","neon material on enemies",function(on)
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP and p.Character then
+            for _,pt in pairs(p.Character:GetDescendants()) do
+                if pt:IsA("BasePart") then
+                    pt.Material=on and Enum.Material.Neon or Enum.Material.SmoothPlastic
+                end
+            end
+        end
+    end
+end)
+toggle("VISUAL","Glass Players","glass material on enemies",function(on)
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP and p.Character then
+            for _,pt in pairs(p.Character:GetDescendants()) do
+                if pt:IsA("BasePart") then
+                    pt.Material=on and Enum.Material.Glass or Enum.Material.SmoothPlastic
+                end
+            end
+        end
+    end
+end)
+toggle("VISUAL","White Players","all enemies white",function(on)
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP and p.Character then
+            for _,pt in pairs(p.Character:GetDescendants()) do
+                if pt:IsA("BasePart") then
+                    pt.BrickColor=on and BrickColor.new("White") or BrickColor.new("Medium stone grey")
+                end
+            end
+        end
+    end
+end)
+toggle("VISUAL","Distance ESP","shows exact dist to each player",function(on)
+    RunService.RenderStepped:Connect(function()
+        if not on or not Root then return end
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local existing=hrp:FindFirstChild("_dpmDistESP")
+                    if not existing then
+                        local bb=Instance.new("BillboardGui"); bb.Name="_dpmDistESP"
+                        bb.Size=UDim2.new(0,80,0,20); bb.StudsOffset=Vector3.new(0,5.5,0)
+                        bb.AlwaysOnTop=true; bb.Adornee=hrp; bb.Parent=hrp
+                        local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1,0,1,0)
+                        lbl.BackgroundTransparency=1; lbl.Font=Enum.Font.GothamBold
+                        lbl.TextSize=9; lbl.TextColor3=Color3.new(0.5,1,1); lbl.Parent=bb
+                        existing=lbl
+                    end
+                    local dist=math.floor((hrp.Position-Root.Position).Magnitude)
+                    local lbl=hrp:FindFirstChild("_dpmDistESP") and hrp._dpmDistESP:FindFirstChildOfClass("TextLabel")
+                    if lbl then lbl.Text=dist.."st" end
+                end
+            end
+        end
+    end)
+end)
 
 -- =============================================
 --  WORLD TAB
@@ -1145,6 +1497,8 @@ toggle("WORLD","Black Sky","pitch black ambient",function(on)
 end)
 toggle("WORLD","Time — Noon","clock set to 12:00",function(on) Lighting.ClockTime=on and 12 or 14 end)
 toggle("WORLD","Time — Night","clock set to 00:00",function(on) Lighting.ClockTime=on and 0 or 14 end)
+toggle("WORLD","Time — Sunset","clock set to 18:00",function(on) Lighting.ClockTime=on and 18 or 14 end)
+toggle("WORLD","Time — Dawn","clock set to 6:00",function(on) Lighting.ClockTime=on and 6 or 14 end)
 toggle("WORLD","Rainbow Sky","cycles ambient color",function(on)
     task.spawn(function()
         local h=0
@@ -1154,6 +1508,50 @@ toggle("WORLD","Rainbow Sky","cycles ambient color",function(on)
 end)
 toggle("WORLD","Blur World","intense blur effect",function(on)
     TweenService:Create(blur,TweenInfo.new(0.5),{Size=on and 24 or 8}):Play()
+end)
+toggle("WORLD","Nuke Map","destroys all parts",function(on)
+    if on then
+        for _,p in pairs(workspace:GetDescendants()) do
+            if p:IsA("BasePart") and not p:IsDescendantOf(LP.Character or Instance.new("Model")) then
+                pcall(function() p:Destroy() end)
+            end
+        end
+    end
+end)
+toggle("WORLD","Ice World","make everything slippery",function(on)
+    for _,p in pairs(workspace:GetDescendants()) do
+        if p:IsA("BasePart") then
+            p.Material=on and Enum.Material.Ice or Enum.Material.SmoothPlastic
+        end
+    end
+end)
+toggle("WORLD","Invisible Map","parts all transparent",function(on)
+    for _,p in pairs(workspace:GetDescendants()) do
+        if p:IsA("BasePart") and not p:IsDescendantOf(LP.Character or Instance.new("Model")) then
+            p.Transparency=on and 1 or 0
+        end
+    end
+end)
+toggle("WORLD","All Parts Neon","neon map glow",function(on)
+    for _,p in pairs(workspace:GetDescendants()) do
+        if p:IsA("BasePart") and not p:IsDescendantOf(LP.Character or Instance.new("Model")) then
+            p.Material=on and Enum.Material.Neon or Enum.Material.SmoothPlastic
+        end
+    end
+end)
+toggle("WORLD","Map Color White","whiteout world",function(on)
+    for _,p in pairs(workspace:GetDescendants()) do
+        if p:IsA("BasePart") and not p:IsDescendantOf(LP.Character or Instance.new("Model")) then
+            p.BrickColor=on and BrickColor.new("White") or BrickColor.new("Medium stone grey")
+        end
+    end
+end)
+toggle("WORLD","Map Color Black","blackout world",function(on)
+    for _,p in pairs(workspace:GetDescendants()) do
+        if p:IsA("BasePart") and not p:IsDescendantOf(LP.Character or Instance.new("Model")) then
+            p.BrickColor=on and BrickColor.new("Really black") or BrickColor.new("Medium stone grey")
+        end
+    end
 end)
 
 -- =============================================
@@ -1203,6 +1601,17 @@ toggle("PLAYER","Giant Mode","scales char to 500%",function(on)
         end
     end
 end)
+toggle("PLAYER","Kaiju Mode","scales to 1500%",function(on)
+    if Char then
+        local hum=Char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.BodyDepthScale.Value=on and 15 or 1
+            hum.BodyHeightScale.Value=on and 15 or 1
+            hum.BodyWidthScale.Value=on and 15 or 1
+            hum.HeadScale.Value=on and 15 or 1
+        end
+    end
+end)
 toggle("PLAYER","High Jump","massive jump power",function(on)
     if Hum then Hum.JumpPower=on and 200 or 50 end
 end)
@@ -1223,9 +1632,487 @@ toggle("PLAYER","Ghost Mode","no clip + invisible",function(on)
         end
     end
 end)
+toggle("PLAYER","Neon Self","neon material on self",function(on)
+    if Char then
+        for _,p in pairs(Char:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.Material=on and Enum.Material.Neon or Enum.Material.SmoothPlastic
+            end
+        end
+    end
+end)
+toggle("PLAYER","White Self","pure white body",function(on)
+    if Char then
+        for _,p in pairs(Char:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.BrickColor=on and BrickColor.new("White") or BrickColor.new("Medium stone grey")
+            end
+        end
+    end
+end)
+toggle("PLAYER","Black Self","pure black body",function(on)
+    if Char then
+        for _,p in pairs(Char:GetDescendants()) do
+            if p:IsA("BasePart") then
+                p.BrickColor=on and BrickColor.new("Really black") or BrickColor.new("Medium stone grey")
+            end
+        end
+    end
+end)
+toggle("PLAYER","Glass Body","transparent glass self",function(on)
+    if Char then
+        for _,p in pairs(Char:GetDescendants()) do
+            if p:IsA("BasePart") and p.Name~="HumanoidRootPart" then
+                p.Material=on and Enum.Material.Glass or Enum.Material.SmoothPlastic
+                p.Transparency=on and 0.5 or 0
+            end
+        end
+    end
+end)
+toggle("PLAYER","Auto Heal","regen health 1/s",function(on)
+    task.spawn(function()
+        while on do
+            if Hum then Hum.Health=math.min(Hum.Health+5,Hum.MaxHealth) end
+            task.wait(0.1)
+        end
+    end)
+end)
+toggle("PLAYER","Max Health x10","set max HP to 10000",function(on)
+    if Hum then Hum.MaxHealth=on and 10000 or 100; Hum.Health=Hum.MaxHealth end
+end)
+toggle("PLAYER","Head Spin","head rotates fast",function(on)
+    RunService.Heartbeat:Connect(function()
+        if on and Char then
+            local head=Char:FindFirstChild("Head")
+            if head then head.CFrame=head.CFrame*CFrame.Angles(0,math.rad(25),0) end
+        end
+    end)
+end)
+toggle("PLAYER","Crouch","force crouch state",function(on)
+    if Hum then Hum:ChangeState(on and Enum.HumanoidStateType.Seated or Enum.HumanoidStateType.Running) end
+end)
 
 -- =============================================
---  GAME TAB
+--  TROLL TAB
+-- =============================================
+toggle("TROLL","Chat Spam","sends msgs every 2s",function(on)
+    local msgs={"L","ez","ratio","no diff","DPM PREMIUM","skill issue","bro","reported","W","DPM wins","💀","washed","never winning","cooked"}
+    task.spawn(function()
+        while on do
+            pcall(function()
+                game:GetService("ReplicatedStorage")
+                    :WaitForChild("DefaultChatSystemChatEvents")
+                    :WaitForChild("SayMessageRequest")
+                    :FireServer(msgs[math.random(#msgs)],"All")
+            end)
+            task.wait(2)
+        end
+    end)
+end)
+toggle("TROLL","Spam Jump","vibrates character",function(on)
+    task.spawn(function()
+        while on do
+            if Hum then Hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+            task.wait(0.05)
+        end
+    end)
+end)
+toggle("TROLL","Seizure Gravity","random gravity 0.1s",function(on)
+    task.spawn(function()
+        while on do workspace.Gravity=math.random(20,500) task.wait(0.1) end
+        workspace.Gravity=196.2
+    end)
+end)
+toggle("TROLL","Fling Self","launch yourself randomly",function(on)
+    if on and Root then
+        local bv=Instance.new("BodyVelocity"); bv.MaxForce=Vector3.new(1e5,1e5,1e5)
+        bv.Velocity=Vector3.new(math.random(-200,200),300,math.random(-200,200))
+        bv.Parent=Root; game:GetService("Debris"):AddItem(bv,0.5)
+    end
+end)
+toggle("TROLL","Spam Emotes","spams random emotes",function(on)
+    local emotes={"wave","point","laugh","cheer","dance"}
+    task.spawn(function()
+        while on do
+            pcall(function()
+                local e=emotes[math.random(#emotes)]
+                game:GetService("Chat"):Chat(LP.Character and LP.Character:FindFirstChild("Head"),"/"..e)
+            end)
+            task.wait(1)
+        end
+    end)
+end)
+toggle("TROLL","Spin Others","spin all enemies",function(on)
+    RunService.Heartbeat:Connect(function()
+        if not on then return end
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then hrp.CFrame=hrp.CFrame*CFrame.Angles(0,math.rad(20),0) end
+            end
+        end
+    end)
+end)
+toggle("TROLL","Tiny Others","shrinks all other players",function(on)
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP and p.Character then
+            local hum=p.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.BodyDepthScale.Value=on and 0.15 or 1
+                hum.BodyHeightScale.Value=on and 0.15 or 1
+                hum.BodyWidthScale.Value=on and 0.15 or 1
+                hum.HeadScale.Value=on and 0.15 or 1
+            end
+        end
+    end
+end)
+toggle("TROLL","Giant Others","makes enemies huge",function(on)
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP and p.Character then
+            local hum=p.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.BodyDepthScale.Value=on and 8 or 1
+                hum.BodyHeightScale.Value=on and 8 or 1
+                hum.BodyWidthScale.Value=on and 8 or 1
+                hum.HeadScale.Value=on and 8 or 1
+            end
+        end
+    end
+end)
+toggle("TROLL","Disco Floor","random floor colors",function(on)
+    task.spawn(function()
+        while on do
+            for _,p in pairs(workspace:GetDescendants()) do
+                if p:IsA("BasePart") and p.Name:lower():find("floor") then
+                    p.Color=Color3.fromHSV(math.random(),0.9,1)
+                end
+            end
+            task.wait(0.1)
+        end
+    end)
+end)
+toggle("TROLL","Fling All","launch every player",function(on)
+    if on then
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local bv=Instance.new("BodyVelocity")
+                    bv.MaxForce=Vector3.new(1e5,1e5,1e5)
+                    bv.Velocity=Vector3.new(math.random(-300,300),500,math.random(-300,300))
+                    bv.Parent=hrp; game:GetService("Debris"):AddItem(bv,0.3)
+                end
+            end
+        end
+    end
+end)
+toggle("TROLL","Teleport Bomb","tp to each player briefly",function(on)
+    task.spawn(function()
+        while on do
+            for _,p in pairs(Players:GetPlayers()) do
+                if p~=LP and p.Character and Root then
+                    local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then Root.CFrame=hrp.CFrame+Vector3.new(0,3,0) end
+                    task.wait(0.3)
+                end
+            end
+        end
+    end)
+end)
+toggle("TROLL","Loop Kick Self","fake reset loop",function(on)
+    task.spawn(function()
+        while on do
+            if Hum then Hum.Health=0 end
+            task.wait(3)
+        end
+    end)
+end)
+toggle("TROLL","Random Colors","flash chars random colors",function(on)
+    task.spawn(function()
+        while on do
+            for _,p in pairs(Players:GetPlayers()) do
+                if p~=LP and p.Character then
+                    for _,pt in pairs(p.Character:GetDescendants()) do
+                        if pt:IsA("BasePart") then
+                            pt.BrickColor=BrickColor.random()
+                        end
+                    end
+                end
+            end
+            task.wait(0.08)
+        end
+    end)
+end)
+
+-- =============================================
+--  CAMERA TAB
+-- =============================================
+toggle("CAMERA","Third Person Far","zoom out cam",function(on)
+    Cam.FieldOfView=on and 100 or 70
+end)
+toggle("CAMERA","Wide FOV 120","ultra wide view",function(on)
+    Cam.FieldOfView=on and 120 or 70
+end)
+toggle("CAMERA","Cinematic 50","cinematic narrow",function(on)
+    Cam.FieldOfView=on and 50 or 70
+end)
+toggle("CAMERA","Freecam","detach camera from char",function(on)
+    if on then
+        Cam.CameraType=Enum.CameraType.Scriptable
+        local cf=Cam.CFrame
+        RunService.RenderStepped:Connect(function()
+            if on then Cam.CFrame=cf end
+        end)
+    else
+        Cam.CameraType=Enum.CameraType.Custom
+    end
+end)
+toggle("CAMERA","Spin Cam","camera revolves around you",function(on)
+    local angle=0
+    RunService.RenderStepped:Connect(function()
+        if on and Root then
+            angle=angle+0.02
+            local r=12
+            Cam.CFrame=CFrame.new(
+                Root.Position+Vector3.new(math.cos(angle)*r,4,math.sin(angle)*r),
+                Root.Position)
+        end
+    end)
+end)
+toggle("CAMERA","Overhead Cam","top-down view",function(on)
+    RunService.RenderStepped:Connect(function()
+        if on and Root then
+            Cam.CameraType=Enum.CameraType.Scriptable
+            Cam.CFrame=CFrame.new(Root.Position+Vector3.new(0,30,0),Root.Position)
+        else
+            Cam.CameraType=Enum.CameraType.Custom
+        end
+    end)
+end)
+toggle("CAMERA","First Person Lock","force 1st person",function(on)
+    RunService.RenderStepped:Connect(function()
+        if on then LP.CameraMaxZoomDistance=0.5 else LP.CameraMaxZoomDistance=128 end
+    end)
+end)
+toggle("CAMERA","Third Person Lock","force 3rd person",function(on)
+    LP.CameraMinZoomDistance=on and 6 or 0.5
+    LP.CameraMaxZoomDistance=on and 6 or 128
+end)
+toggle("CAMERA","Earthquake Cam","shake effect on cam",function(on)
+    task.spawn(function()
+        while on do
+            if Root then
+                local shk=Vector3.new(
+                    math.random(-100,100)/100,
+                    math.random(-100,100)/100,
+                    math.random(-100,100)/100)
+                Cam.CFrame=Cam.CFrame+shk
+            end
+            task.wait(0.04)
+        end
+    end)
+end)
+toggle("CAMERA","Noclip Cam","camera goes through walls",function(on)
+    Cam.HeadLocked=not on
+end)
+toggle("CAMERA","Mirror View","flip camera horizontal",function(on)
+    RunService.RenderStepped:Connect(function()
+        if on then
+            Cam.CameraType=Enum.CameraType.Scriptable
+            Cam.CFrame=Cam.CFrame*CFrame.fromMatrix(Vector3.zero,Vector3.new(-1,0,0),Vector3.new(0,1,0))
+        end
+    end)
+end)
+
+-- =============================================
+--  EXPLOIT TAB
+-- =============================================
+toggle("EXPLOIT","Remove Tools","strips all tools from others",function(on)
+    if on then
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                for _,t in pairs(p.Character:GetChildren()) do
+                    if t:IsA("Tool") then pcall(function() t:Destroy() end) end
+                end
+            end
+        end
+    end
+end)
+toggle("EXPLOIT","Print LocalScripts","logs all client scripts",function(on)
+    if on then
+        for _,v in pairs(game:GetDescendants()) do
+            if v:IsA("LocalScript") or v:IsA("ModuleScript") then
+                print("[DPM LS] "..v:GetFullName())
+            end
+        end
+    end
+end)
+toggle("EXPLOIT","Print Values","logs all values in game",function(on)
+    if on then
+        for _,v in pairs(game:GetDescendants()) do
+            if v:IsA("IntValue") or v:IsA("NumberValue") or v:IsA("StringValue") or v:IsA("BoolValue") then
+                print("[DPM VAL] "..v:GetFullName().." = "..tostring(v.Value))
+            end
+        end
+    end
+end)
+toggle("EXPLOIT","Fire All Remotes","fires every remote once",function(on)
+    if on then
+        for _,v in pairs(game:GetDescendants()) do
+            if v:IsA("RemoteEvent") then
+                pcall(function() v:FireServer() end)
+            end
+        end
+    end
+end)
+toggle("EXPLOIT","Anchor All Parts","freeze entire map",function(on)
+    for _,p in pairs(workspace:GetDescendants()) do
+        if p:IsA("BasePart") then p.Anchored=on end
+    end
+end)
+toggle("EXPLOIT","Unanchor All Parts","make map fall",function(on)
+    for _,p in pairs(workspace:GetDescendants()) do
+        if p:IsA("BasePart") and not p:IsDescendantOf(LP.Character or Instance.new("Model")) then
+            p.Anchored=not on
+        end
+    end
+end)
+toggle("EXPLOIT","Delete NPC","remove all NPCs",function(on)
+    if on then
+        for _,v in pairs(workspace:GetDescendants()) do
+            if v:IsA("Model") and v~=LP.Character and v:FindFirstChildOfClass("Humanoid") then
+                pcall(function() v:Destroy() end)
+            end
+        end
+    end
+end)
+toggle("EXPLOIT","Max Values","set all IntValues to max",function(on)
+    if on then
+        for _,v in pairs(game:GetDescendants()) do
+            if v:IsA("IntValue") or v:IsA("NumberValue") then
+                pcall(function() v.Value=999999 end)
+            end
+        end
+    end
+end)
+toggle("EXPLOIT","Tool Drop Spam","drop equipped tool fast",function(on)
+    task.spawn(function()
+        while on and Char do
+            local t=Char:FindFirstChildOfClass("Tool")
+            if t then
+                LP.Backpack:WaitForChild(t.Name,0.1)
+                pcall(function() Hum:UnequipTools() end)
+            end
+            task.wait(0.1)
+        end
+    end)
+end)
+toggle("EXPLOIT","Print Camera CFrame","outputs cam position",function(on)
+    if on then
+        RunService.Heartbeat:Connect(function()
+            if on then print("[DPM CAM] "..tostring(Cam.CFrame)) end
+        end)
+    end
+end)
+
+-- =============================================
+--  SOUND TAB
+-- =============================================
+toggle("SOUND","Mute All Sounds","silence entire game",function(on)
+    for _,v in pairs(workspace:GetDescendants()) do
+        if v:IsA("Sound") then v.Volume=on and 0 or 0.5 end
+    end
+    SoundService.AmbientReverb=on and Enum.ReverbType.NoReverb or Enum.ReverbType.GenericReverb
+end)
+toggle("SOUND","Max Volume All","blast everything loud",function(on)
+    for _,v in pairs(workspace:GetDescendants()) do
+        if v:IsA("Sound") then v.Volume=on and 10 or 0.5 end
+    end
+end)
+toggle("SOUND","Pitch Shift Up","chipmunk audio effect",function(on)
+    for _,v in pairs(workspace:GetDescendants()) do
+        if v:IsA("Sound") then v.PlaybackSpeed=on and 2 or 1 end
+    end
+end)
+toggle("SOUND","Pitch Shift Down","deep bass audio effect",function(on)
+    for _,v in pairs(workspace:GetDescendants()) do
+        if v:IsA("Sound") then v.PlaybackSpeed=on and 0.5 or 1 end
+    end
+end)
+toggle("SOUND","Echo All","adds reverb everywhere",function(on)
+    local eq=Lighting:FindFirstChild("_dpmEQ") or Instance.new("EqualizerSoundEffect")
+    eq.Name="_dpmEQ"; eq.Parent=SoundService
+    eq.LowGain=on and 3 or 0; eq.MidGain=on and 3 or 0; eq.HighGain=on and 3 or 0
+end)
+toggle("SOUND","Step Clicker","click sound per step",function(on)
+    RunService.Stepped:Connect(function()
+        if on and Hum and Hum.MoveDirection.Magnitude>0 then
+            local s=Instance.new("Sound"); s.SoundId="rbxassetid://9120386436"
+            s.Volume=0.4; s.Parent=Root; s:Play()
+            game:GetService("Debris"):AddItem(s,0.5)
+        end
+    end)
+end)
+
+-- =============================================
+--  LIGHTING TAB
+-- =============================================
+toggle("LIGHTING","Blur Effect","strong depth of field",function(on)
+    local dof=Lighting:FindFirstChildOfClass("DepthOfFieldEffect") or Instance.new("DepthOfFieldEffect")
+    dof.Parent=Lighting; dof.FarIntensity=on and 1 or 0; dof.NearIntensity=on and 1 or 0
+    dof.FocusDistance=on and 50 or 10; dof.InFocusRadius=on and 1 or 10
+end)
+toggle("LIGHTING","Bloom Effect","glow on bright parts",function(on)
+    local bloom=Lighting:FindFirstChild("_dpmBloom") or Instance.new("BloomEffect")
+    bloom.Name="_dpmBloom"; bloom.Parent=Lighting
+    bloom.Intensity=on and 2 or 0; bloom.Size=on and 20 or 0; bloom.Threshold=on and 0.9 or 1
+end)
+toggle("LIGHTING","Color Correction","cinematic grade",function(on)
+    local cc=Lighting:FindFirstChild("_dpmCC") or Instance.new("ColorCorrectionEffect")
+    cc.Name="_dpmCC"; cc.Parent=Lighting
+    cc.Contrast=on and 0.3 or 0; cc.Saturation=on and -0.3 or 0; cc.Brightness=on and 0.05 or 0
+end)
+toggle("LIGHTING","Inverse Colors","invert entire scene",function(on)
+    local cc=Lighting:FindFirstChild("_dpmInv") or Instance.new("ColorCorrectionEffect")
+    cc.Name="_dpmInv"; cc.Parent=Lighting; cc.TintColor=on and Color3.fromRGB(0,0,0) or Color3.new(1,1,1)
+    cc.Brightness=on and -0.5 or 0
+end)
+toggle("LIGHTING","Sunray Effect","god rays from sun",function(on)
+    local sun=Lighting:FindFirstChildOfClass("SunRaysEffect") or Instance.new("SunRaysEffect")
+    sun.Parent=Lighting; sun.Intensity=on and 0.5 or 0; sun.Spread=on and 0.5 or 0
+end)
+toggle("LIGHTING","Night Vision","green tint dark boost",function(on)
+    local cc=Lighting:FindFirstChild("_dpmNV") or Instance.new("ColorCorrectionEffect")
+    cc.Name="_dpmNV"; cc.Parent=Lighting
+    cc.TintColor=on and Color3.fromRGB(100,200,100) or Color3.new(1,1,1)
+    Lighting.Brightness=on and 5 or 1
+end)
+toggle("LIGHTING","Thermal Vision","red-heat map tint",function(on)
+    local cc=Lighting:FindFirstChild("_dpmTV") or Instance.new("ColorCorrectionEffect")
+    cc.Name="_dpmTV"; cc.Parent=Lighting
+    cc.TintColor=on and Color3.fromRGB(255,100,50) or Color3.new(1,1,1)
+    cc.Contrast=on and 0.5 or 0
+end)
+toggle("LIGHTING","B&W Mode","desaturate everything",function(on)
+    local cc=Lighting:FindFirstChild("_dpmBW") or Instance.new("ColorCorrectionEffect")
+    cc.Name="_dpmBW"; cc.Parent=Lighting; cc.Saturation=on and -1 or 0
+end)
+toggle("LIGHTING","Sepia Mode","old film look",function(on)
+    local cc=Lighting:FindFirstChild("_dpmSep") or Instance.new("ColorCorrectionEffect")
+    cc.Name="_dpmSep"; cc.Parent=Lighting; cc.Saturation=on and -0.7 or 0
+    cc.TintColor=on and Color3.fromRGB(220,180,120) or Color3.new(1,1,1)
+end)
+toggle("LIGHTING","Flicker Light","rapid brightness flicker",function(on)
+    task.spawn(function()
+        while on do
+            Lighting.Brightness=math.random(1,12); task.wait(0.05)
+        end
+        Lighting.Brightness=1
+    end)
+end)
+
+-- =============================================
+--  GAME TAB (game-specific)
 -- =============================================
 if placeId==189707 then
     toggle("GAME","Safe Spot TP","tp to highest point",function(on)
@@ -1369,9 +2256,13 @@ else
     toggle("GAME","Highlight Parts","outlines workspace",function(on)
         for _,v in pairs(workspace:GetDescendants()) do
             if v:IsA("BasePart") and not v:IsDescendantOf(LP.Character or Instance.new("Model")) then
-                local s=Instance.new("SelectionBox"); s.Adornee=v
-                s.Color3=Color3.new(1,1,1); s.LineThickness=0.03
-                s.SurfaceTransparency=0.9; s.Name="_dpmhl"; s.Parent=v
+                if on then
+                    local s=Instance.new("SelectionBox"); s.Adornee=v
+                    s.Color3=Color3.new(1,1,1); s.LineThickness=0.03
+                    s.SurfaceTransparency=0.9; s.Name="_dpmhl"; s.Parent=v
+                else
+                    local s=v:FindFirstChild("_dpmhl"); if s then s:Destroy() end
+                end
             end
         end
     end)
@@ -1380,78 +2271,124 @@ end
 -- =============================================
 --  FUN TAB
 -- =============================================
-toggle("FUN","Spam Jump","vibrates character",function(on)
+toggle("FUN","Party Mode","everything flashes colors",function(on)
     task.spawn(function()
+        local h=0
         while on do
-            if Hum then Hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+            h=(h+0.02)%1
+            Lighting.Ambient=Color3.fromHSV(h,1,1)
+            Lighting.OutdoorAmbient=Color3.fromHSV((h+0.5)%1,1,1)
+            task.wait(0.05)
+        end
+        Lighting.Ambient=Color3.fromRGB(127,127,127)
+        Lighting.OutdoorAmbient=Color3.fromRGB(127,127,127)
+    end)
+end)
+toggle("FUN","Balloon Self","float up slowly forever",function(on)
+    task.spawn(function()
+        while on and Root do
+            if Root then Root.CFrame=Root.CFrame+Vector3.new(0,0.3,0) end
             task.wait(0.05)
         end
     end)
 end)
-toggle("FUN","Seizure Gravity","random gravity 0.1s",function(on)
-    task.spawn(function()
-        while on do workspace.Gravity=math.random(20,500) task.wait(0.1) end
-        workspace.Gravity=196.2
-    end)
-end)
-toggle("FUN","Chat Spam","sends msgs every 2s",function(on)
-    local msgs={"L","ez","ratio","no diff","DPM PREMIUM","skill issue","bro","reported","W","DPM wins"}
-    task.spawn(function()
-        while on do
-            pcall(function()
-                game:GetService("ReplicatedStorage")
-                    :WaitForChild("DefaultChatSystemChatEvents")
-                    :WaitForChild("SayMessageRequest")
-                    :FireServer(msgs[math.random(#msgs)],"All")
-            end)
-            task.wait(2)
-        end
-    end)
-end)
-toggle("FUN","Fling Others","launches nearby players",function(on)
-    RunService.Heartbeat:Connect(function()
-        if not on or not Root then return end
-        for _,p in pairs(Players:GetPlayers()) do
-            if p~=LP and p.Character then
-                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
-                if hrp and (hrp.Position-Root.Position).Magnitude<15 then
-                    local bv=Instance.new("BodyVelocity")
-                    bv.MaxForce=Vector3.new(1e5,1e5,1e5)
-                    bv.Velocity=Vector3.new(math.random(-80,80),80,math.random(-80,80))
-                    bv.Parent=hrp; game:GetService("Debris"):AddItem(bv,0.2)
-                end
-            end
-        end
-    end)
-end)
-toggle("FUN","Disco Floor","random floor colors",function(on)
-    task.spawn(function()
-        while on do
-            for _,p in pairs(workspace:GetDescendants()) do
-                if p:IsA("BasePart") and p.Name:lower():find("floor") then
-                    p.Color=Color3.fromHSV(math.random(),0.9,1)
-                end
-            end
-            task.wait(0.1)
-        end
-    end)
-end)
-toggle("FUN","Tiny Others","shrinks all other players",function(on)
-    for _,p in pairs(Players:GetPlayers()) do
-        if p~=LP and p.Character then
-            local hum=p.Character:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.BodyDepthScale.Value=on and 0.15 or 1
-                hum.BodyHeightScale.Value=on and 0.15 or 1
-                hum.BodyWidthScale.Value=on and 0.15 or 1
-                hum.HeadScale.Value=on and 0.15 or 1
+toggle("FUN","Speed Trail","leaves motion blur",function(on)
+    if Char then
+        for _,p in pairs(Char:GetDescendants()) do
+            if p:IsA("BasePart") then
+                local ex=p:FindFirstChild("_dpmTrail")
+                if on and not ex then
+                    local att0=Instance.new("Attachment"); att0.Position=Vector3.new(0,0.5,0); att0.Parent=p
+                    local att1=Instance.new("Attachment"); att1.Position=Vector3.new(0,-0.5,0); att1.Parent=p
+                    local tr=Instance.new("Trail"); tr.Name="_dpmTrail"
+                    tr.Attachment0=att0; tr.Attachment1=att1
+                    tr.Lifetime=0.5; tr.MinLength=0.01
+                    tr.Color=ColorSequence.new({
+                        ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),
+                        ColorSequenceKeypoint.new(1,Color3.new(0.5,0.5,0.5)),
+                    })
+                    tr.Parent=p
+                elseif not on and ex then ex:Destroy() end
             end
         end
     end
 end)
+toggle("FUN","Explosion Walk","boom behind each step",function(on)
+    RunService.Heartbeat:Connect(function()
+        if on and Root and Hum and Hum.MoveDirection.Magnitude>0 then
+            local ex=Instance.new("Explosion")
+            ex.Position=Root.Position-Vector3.new(0,2,0)
+            ex.BlastRadius=3; ex.BlastPressure=0
+            ex.DestroyJointRadiusPercent=0; ex.Parent=workspace
+        end
+    end)
+end)
+toggle("FUN","Big Head Self","my head x5",function(on)
+    if Char then
+        local head=Char:FindFirstChild("Head")
+        if head then head.Size=on and Vector3.new(5,5,5) or Vector3.new(2,1,1) end
+    end
+end)
+toggle("FUN","Orbit Parts","spawns orbiting spheres",function(on)
+    local parts={}
+    if on then
+        for i=1,6 do
+            local p=Instance.new("Part"); p.Size=Vector3.new(1,1,1)
+            p.Anchored=true; p.CanCollide=false
+            p.BrickColor=BrickColor.random(); p.Material=Enum.Material.Neon
+            p.Parent=workspace; table.insert(parts,p)
+        end
+        task.spawn(function()
+            local t=0
+            while on do
+                t=t+0.05
+                if Root then
+                    for i,p in pairs(parts) do
+                        local a=t+(i/6)*math.pi*2
+                        p.CFrame=CFrame.new(Root.Position+Vector3.new(math.cos(a)*5,2,math.sin(a)*5))
+                    end
+                end
+                task.wait(0.05)
+            end
+            for _,p in pairs(parts) do pcall(function() p:Destroy() end) end
+        end)
+    end
+end)
+toggle("FUN","Clone Self","spawns fake copy of you",function(on)
+    if on and Char then
+        local clone=Char:Clone()
+        clone.Name="DPMClone"; clone.Parent=workspace
+        for _,p in pairs(clone:GetDescendants()) do
+            if p:IsA("LocalScript") or p:IsA("Script") then p:Destroy() end
+        end
+        local hrp=clone:FindFirstChild("HumanoidRootPart")
+        if hrp then hrp.Anchored=true; hrp.CFrame=Root.CFrame+Vector3.new(5,0,0) end
+    end
+end)
+toggle("FUN","Gravity Flip","walk on ceiling",function(on)
+    workspace.Gravity=on and -196.2 or 196.2
+end)
+toggle("FUN","Random Teleport","random tp every 2s",function(on)
+    task.spawn(function()
+        while on and Root do
+            Root.CFrame=CFrame.new(
+                math.random(-200,200),
+                math.random(10,50),
+                math.random(-200,200))
+            task.wait(2)
+        end
+    end)
+end)
+toggle("FUN","Fling Self","yeet yourself",function(on)
+    if on and Root then
+        local bv=Instance.new("BodyVelocity"); bv.MaxForce=Vector3.new(1e5,1e5,1e5)
+        bv.Velocity=Vector3.new(math.random(-300,300),500,math.random(-300,300))
+        bv.Parent=Root; game:GetService("Debris"):AddItem(bv,0.5)
+    end
+end)
 
 -- =============================================
---  PREMIUM NOTIFICATION — glass style
+--  PREMIUM NOTIFICATION
 -- =============================================
 local function notify(msg, sub)
     local n=Instance.new("Frame")
@@ -1470,7 +2407,6 @@ local function notify(msg, sub)
     local nStroke=Instance.new("UIStroke"); nStroke.Color=Color3.new(1,1,1)
     nStroke.Thickness=0.8; nStroke.Transparency=0.65; nStroke.Parent=n
 
-    -- shimmer top
     local nShim=Instance.new("Frame"); nShim.Size=UDim2.new(0.5,0,0,1)
     nShim.Position=UDim2.new(0.25,0,0,0); nShim.BackgroundColor3=Color3.new(1,1,1)
     nShim.BackgroundTransparency=0.55; nShim.BorderSizePixel=0; nShim.Parent=n
@@ -1505,5 +2441,6 @@ local function notify(msg, sub)
     end)
 end
 
-task.delay(0.6,function() notify("DPM — PREMIUM","made by DPM  ·  "..gameName) end)
-print("DPM Premium loaded — "..gameName.." ("..placeId..")")
+task.delay(0.6,function() notify("DPM — PREMIUM EXPANDED","made by DPM  ·  "..gameName) end)
+print("DPM Premium Expanded loaded — "..gameName.." ("..placeId..")")
+print("Total tabs: 15 | Mods: 150+")
