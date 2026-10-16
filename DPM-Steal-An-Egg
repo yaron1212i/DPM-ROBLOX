@@ -49,7 +49,7 @@ SG.Name           = "DPMStealEgg"
 SG.ResetOnSpawn   = false
 SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 SG.IgnoreGuiInset = true
-SG.Parent         = game.CoreGui
+SG.Parent = gethui and gethui() or game.CoreGui
 
 local blur = Instance.new("BlurEffect")
 blur.Size=0; blur.Parent=Lighting
