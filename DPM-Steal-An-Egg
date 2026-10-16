@@ -45,13 +45,14 @@ local T = {
 }
 
 -- =============================================
---  ROOT GUI  —  gethui() patch for Delta
+--  ROOT GUI
 -- =============================================
 local SG = Instance.new("ScreenGui")
-SG.Name           = "DPMStealEgg"
+SG.Name           = "DPMPremium"
 SG.ResetOnSpawn   = false
 SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 SG.IgnoreGuiInset = true
+SG.Parent         = game.CoreGui
 
 -- Delta fix: prefer gethui(), fall back to CoreGui
 local guiParent = (typeof(gethui) == "function" and gethui()) or
