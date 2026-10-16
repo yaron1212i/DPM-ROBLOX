@@ -1,7 +1,7 @@
 -- ╔══════════════════════════════════════╗
 -- ║        DPM — STEAL AN EGG  v2        ║
 -- ║             made by DPM              ║
--- ║     fixed: gethui() CoreGui patch    ║
+-- ║   fixed: guiParent double-parent bug  ║
 -- ╚══════════════════════════════════════╝
 
 local Players          = game:GetService("Players")
@@ -56,12 +56,15 @@ SG.Name           = "DPMPremium"
 SG.ResetOnSpawn   = false
 SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 SG.IgnoreGuiInset = true
-SG.Parent         = game.CoreGui
 
--- Delta fix: prefer gethui(), fall back to CoreGui
-local guiParent = (typeof(gethui) == "function" and gethui()) or
-                  (pcall(function() return game:GetService("CoreGui") end) and game:GetService("CoreGui")) or
-                  LP.PlayerGui
+-- Clean parent resolution: gethui() first, then CoreGui, then PlayerGui fallback
+local guiParent
+if typeof(gethui) == "function" then
+    guiParent = gethui()
+else
+    local ok, cg = pcall(function() return game:GetService("CoreGui") end)
+    guiParent = (ok and cg) or LP.PlayerGui
+end
 SG.Parent = guiParent
 
 local blur = Instance.new("BlurEffect")
