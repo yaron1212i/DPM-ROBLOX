@@ -4,8 +4,6 @@
 
 2. DPM-PREMIUM
 
-3. DPM-GLASS
-
 
 # GAMES: 
 
