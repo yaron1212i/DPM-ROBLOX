@@ -11,6 +11,10 @@ local TweenService     = game:GetService("TweenService")
 local Lighting         = game:GetService("Lighting")
 local RS               = game:GetService("ReplicatedStorage")
 local WS               = game:GetService("Workspace")
+local HttpService      = game:GetService("HttpService")
+local StarterGui       = game:GetService("StarterGui")
+local SoundService     = game:GetService("SoundService")
+local ReplicatedStorage= game:GetService("ReplicatedStorage")
 
 local LP  = Players.LocalPlayer
 local Cam = workspace.CurrentCamera
