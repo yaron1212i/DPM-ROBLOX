@@ -1,7 +1,6 @@
 -- ╔══════════════════════════════════════╗
--- ║        DPM — STEAL AN EGG  v2        ║
--- ║             made by DPM              ║
--- ║   fixed: guiParent double-parent bug  ║
+-- ║       DPM — STEAL AN EGG            ║
+-- ║             made by DPM             ║
 -- ╚══════════════════════════════════════╝
 
 local Players          = game:GetService("Players")
@@ -9,12 +8,9 @@ local RunService       = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local TweenService     = game:GetService("TweenService")
 local Lighting         = game:GetService("Lighting")
-local RS               = game:GetService("ReplicatedStorage")
-local WS               = game:GetService("Workspace")
-local HttpService      = game:GetService("HttpService")
 local StarterGui       = game:GetService("StarterGui")
-local SoundService     = game:GetService("SoundService")
 local ReplicatedStorage= game:GetService("ReplicatedStorage")
+local HttpService      = game:GetService("HttpService")
 
 local LP  = Players.LocalPlayer
 local Cam = workspace.CurrentCamera
@@ -29,264 +25,287 @@ refreshChar(LP.Character or LP.CharacterAdded:Wait())
 LP.CharacterAdded:Connect(refreshChar)
 
 -- =============================================
+--  GAME IDENTITY
+-- =============================================
+local PLACE_ID = 107778070777162
+local GAME_NAME = "Steal An Egg"
+
+-- =============================================
+--  EASING HELPERS
+-- =============================================
+local function animateIn(frame, targetSize, targetPos)
+    frame.Size     = UDim2.new(0, targetSize.X.Offset*0.85, 0, targetSize.Y.Offset*0.85)
+    frame.Position = UDim2.new(targetPos.X.Scale, targetPos.X.Offset, targetPos.Y.Scale, targetPos.Y.Offset + 18)
+    frame.BackgroundTransparency = 1
+    TweenService:Create(frame, TweenInfo.new(0.45, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size     = targetSize,
+        Position = targetPos,
+        BackgroundTransparency = 0.35,
+    }):Play()
+end
+
+-- =============================================
 --  THEME
 -- =============================================
 local T = {
-    glass      = Color3.fromRGB(12,12,14),
-    glassCard  = Color3.fromRGB(22,22,26),
-    glassCardOn= Color3.fromRGB(34,34,40),
-    bar        = Color3.fromRGB(10,10,12),
-    white      = Color3.new(1,1,1),
-    offWhite   = Color3.fromRGB(200,200,210),
-    dim        = Color3.fromRGB(80,80,95),
-    dimDark    = Color3.fromRGB(45,45,55),
-    sep        = Color3.fromRGB(38,38,46),
-    red        = Color3.fromRGB(200,45,45),
-    tabOn      = Color3.new(1,1,1),
-    tabOff     = Color3.fromRGB(22,22,28),
-    accent     = Color3.fromRGB(120,80,255),
-    accentSoft = Color3.fromRGB(80,50,180),
+    glass      = Color3.fromRGB(12, 12, 14),
+    glassLight = Color3.fromRGB(28, 28, 34),
+    glassCard  = Color3.fromRGB(22, 22, 26),
+    bar        = Color3.fromRGB(10, 10, 12),
+    white      = Color3.new(1, 1, 1),
+    offWhite   = Color3.fromRGB(200, 200, 210),
+    dim        = Color3.fromRGB(80, 80, 95),
+    dimDark    = Color3.fromRGB(45, 45, 55),
+    sep        = Color3.fromRGB(38, 38, 46),
+    red        = Color3.fromRGB(200, 45, 45),
+    tabOn      = Color3.new(1, 1, 1),
+    tabOff     = Color3.fromRGB(22, 22, 28),
+    accent     = Color3.fromRGB(255, 210, 60), -- egg gold accent
 }
 
 -- =============================================
 --  ROOT GUI
 -- =============================================
 local SG = Instance.new("ScreenGui")
-SG.Name           = "DPMPremium"
+SG.Name           = "DPMStealAnEgg"
 SG.ResetOnSpawn   = false
 SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 SG.IgnoreGuiInset = true
-
--- Clean parent resolution: gethui() first, then CoreGui, then PlayerGui fallback
-local guiParent
-if typeof(gethui) == "function" then
-    guiParent = gethui()
-else
-    local ok, cg = pcall(function() return game:GetService("CoreGui") end)
-    guiParent = (ok and cg) or LP.PlayerGui
-end
-SG.Parent = guiParent
+SG.Parent         = game.CoreGui
 
 local blur = Instance.new("BlurEffect")
-blur.Size=0; blur.Parent=Lighting
-TweenService:Create(blur,TweenInfo.new(0.5),{Size=6}):Play()
-
--- =============================================
---  SCAN REMOTES — runs on load, cached
--- =============================================
-local remoteCache = {}
-task.spawn(function()
-    for _,v in pairs(game:GetDescendants()) do
-        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-            local n=v.Name:lower()
-            remoteCache[n]=v
-            for _,key in pairs({"egg","fuse","hatch","open","spawn","grab","steal",
-                                 "collect","pick","merge","combine","farm","pet","buy","sell",
-                                 "rebirth","prestige","coin","gem","currency","shop","trade"}) do
-                if n:find(key) then
-                    if not remoteCache["_"..key] then remoteCache["_"..key]={} end
-                    table.insert(remoteCache["_"..key],v)
-                end
-            end
-        end
-    end
-    print("[DPM] Remotes scanned: "..tostring(#remoteCache))
-end)
-
-local function fireRemote(key,...)
-    local list=remoteCache["_"..key]
-    if list then
-        for _,r in pairs(list) do
-            pcall(function()
-                if r:IsA("RemoteEvent") then r:FireServer(...)
-                else r:InvokeServer(...) end
-            end)
-        end
-        return true
-    end
-    return false
-end
-
--- =============================================
---  EGG SCANNER
--- =============================================
-local function scanEggs()
-    local eggs={}
-    for _,v in pairs(workspace:GetDescendants()) do
-        local n=v.Name:lower()
-        if n:find("egg") then
-            local pos,part=nil,nil
-            if v:IsA("Model") then
-                local bp=v.PrimaryPart or v:FindFirstChildOfClass("BasePart")
-                if bp then pos=bp.Position; part=v end
-            elseif v:IsA("BasePart") then
-                pos=v.Position; part=v
-            end
-            if pos and part then
-                table.insert(eggs,{name=v.Name,pos=pos,obj=part})
-            end
-        end
-    end
-    if Root then
-        table.sort(eggs,function(a,b)
-            return (a.pos-Root.Position).Magnitude < (b.pos-Root.Position).Magnitude
-        end)
-    end
-    return eggs
-end
+blur.Size   = 0
+blur.Parent = Lighting
+TweenService:Create(blur, TweenInfo.new(0.5), {Size = 8}):Play()
 
 -- =============================================
 --  MAIN FRAME
 -- =============================================
 local MF = Instance.new("Frame")
-MF.Name="Main"; MF.Size=UDim2.new(0,352,0,520)
-MF.Position=UDim2.new(0.5,-176,0.5,-260)
-MF.BackgroundColor3=T.glass; MF.BackgroundTransparency=0.3
-MF.BorderSizePixel=0; MF.ClipsDescendants=true; MF.Parent=SG
-Instance.new("UICorner",MF).CornerRadius=UDim.new(0,18)
+MF.Name                  = "Main"
+MF.Size                  = UDim2.new(0, 340, 0, 420)
+MF.Position              = UDim2.new(0.5, -170, 0.5, -210)
+MF.BackgroundColor3      = T.glass
+MF.BackgroundTransparency= 0.35
+MF.BorderSizePixel       = 0
+MF.ClipsDescendants      = true
+MF.Parent                = SG
+Instance.new("UICorner", MF).CornerRadius = UDim.new(0, 16)
 
-local MFGrad=Instance.new("UIGradient")
-MFGrad.Color=ColorSequence.new({
-    ColorSequenceKeypoint.new(0,Color3.fromRGB(38,28,56)),
-    ColorSequenceKeypoint.new(0.5,Color3.fromRGB(12,12,18)),
-    ColorSequenceKeypoint.new(1,Color3.fromRGB(8,8,12)),
+local MFStroke = Instance.new("UIStroke")
+MFStroke.Color       = T.accent
+MFStroke.Thickness   = 1.2
+MFStroke.Transparency= 0.5
+MFStroke.Parent      = MF
+
+local MFGrad = Instance.new("UIGradient")
+MFGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   Color3.fromRGB(38, 35, 20)),
+    ColorSequenceKeypoint.new(0.4, Color3.fromRGB(12, 12, 16)),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(8,  8,  10)),
 })
-MFGrad.Rotation=145; MFGrad.Parent=MF
+MFGrad.Rotation = 145
+MFGrad.Parent   = MF
 
-local MFStroke=Instance.new("UIStroke")
-MFStroke.Color=T.accent; MFStroke.Thickness=1.4
-MFStroke.Transparency=0.5; MFStroke.Parent=MF
-
+-- animated gold border pulse
 task.spawn(function()
-    local t=0
+    local t = 0
     while MF and MF.Parent do
-        t=t+task.wait(0.05)
-        MFStroke.Transparency=0.35+math.sin(t*0.9)*0.3
-        MFStroke.Color=Color3.fromHSV((t*0.03)%1,0.6,1)
+        t = t + task.wait(0.05)
+        MFStroke.Transparency = 0.3 + math.sin(t * 0.9) * 0.35
     end
 end)
 
--- entrance animation
-MF.Size=UDim2.new(0,352*0.85,0,520*0.85); MF.BackgroundTransparency=1
-TweenService:Create(MF,TweenInfo.new(0.45,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{
-    Size=UDim2.new(0,352,0,520),BackgroundTransparency=0.25
-}):Play()
+animateIn(MF, UDim2.new(0,340,0,420), UDim2.new(0.5,-170,0.5,-210))
 
--- top shimmer
-local TopGlow=Instance.new("Frame"); TopGlow.Size=UDim2.new(1,0,0,2)
-TopGlow.BackgroundColor3=T.accent; TopGlow.BackgroundTransparency=0.3
-TopGlow.BorderSizePixel=0; TopGlow.ZIndex=10; TopGlow.Parent=MF
-local TGG=Instance.new("UIGradient"); TGG.Color=ColorSequence.new({
-    ColorSequenceKeypoint.new(0,Color3.new(0,0,0)),
-    ColorSequenceKeypoint.new(0.3,Color3.new(1,1,1)),
-    ColorSequenceKeypoint.new(0.7,Color3.new(1,1,1)),
-    ColorSequenceKeypoint.new(1,Color3.new(0,0,0)),
-}); TGG.Parent=TopGlow
+-- top glow bar — gold
+local TopGlow = Instance.new("Frame")
+TopGlow.Size             = UDim2.new(1,0,0,2)
+TopGlow.BackgroundColor3 = T.accent
+TopGlow.BackgroundTransparency = 0.2
+TopGlow.BorderSizePixel  = 0
+TopGlow.ZIndex           = 10
+TopGlow.Parent           = MF
+
+local TGGrad = Instance.new("UIGradient")
+TGGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   Color3.fromRGB(0,0,0)),
+    ColorSequenceKeypoint.new(0.3, T.accent),
+    ColorSequenceKeypoint.new(0.7, T.accent),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(0,0,0)),
+})
+TGGrad.Parent = TopGlow
+
 task.spawn(function()
-    local t=0
+    local t = 0
     while TopGlow and TopGlow.Parent do
-        t=t+task.wait(0.04)
-        TopGlow.BackgroundTransparency=0.2+math.sin(t*1.3)*0.4
+        t = t + task.wait(0.04)
+        TopGlow.BackgroundTransparency = 0.1 + math.sin(t*1.3)*0.35
     end
 end)
 
 -- =============================================
 --  TITLE BAR
 -- =============================================
-local TB=Instance.new("Frame"); TB.Size=UDim2.new(1,0,0,46)
-TB.Position=UDim2.new(0,0,0,2); TB.BackgroundColor3=T.bar
-TB.BackgroundTransparency=0.15; TB.BorderSizePixel=0; TB.ZIndex=6; TB.Parent=MF
-Instance.new("UICorner",TB).CornerRadius=UDim.new(0,18)
+local TB = Instance.new("Frame")
+TB.Size                  = UDim2.new(1,0,0,44)
+TB.Position              = UDim2.new(0,0,0,2)
+TB.BackgroundColor3      = T.bar
+TB.BackgroundTransparency= 0.2
+TB.BorderSizePixel       = 0
+TB.ZIndex                = 6
+TB.Parent                = MF
+Instance.new("UICorner", TB).CornerRadius = UDim.new(0,16)
 
-local TBFill=Instance.new("Frame"); TBFill.Size=UDim2.new(1,0,0,18)
-TBFill.Position=UDim2.new(0,0,1,-18); TBFill.BackgroundColor3=T.bar
-TBFill.BackgroundTransparency=0.15; TBFill.BorderSizePixel=0; TBFill.ZIndex=6; TBFill.Parent=TB
+local TBFill = Instance.new("Frame")
+TBFill.Size             = UDim2.new(1,0,0,16)
+TBFill.Position         = UDim2.new(0,0,1,-16)
+TBFill.BackgroundColor3 = T.bar
+TBFill.BackgroundTransparency = 0.2
+TBFill.BorderSizePixel  = 0
+TBFill.ZIndex           = 6
+TBFill.Parent           = TB
 
-local TBG=Instance.new("UIGradient"); TBG.Color=ColorSequence.new({
-    ColorSequenceKeypoint.new(0,Color3.fromRGB(30,20,52)),
-    ColorSequenceKeypoint.new(1,Color3.fromRGB(10,10,16)),
-}); TBG.Rotation=90; TBG.Parent=TB
+local TBGrad = Instance.new("UIGradient")
+TBGrad.Color = ColorSequence.new({
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(35,32,12)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(10,10,13)),
+})
+TBGrad.Rotation = 90; TBGrad.Parent = TB
 
-local TBSep=Instance.new("Frame"); TBSep.Size=UDim2.new(0.85,0,0,1)
-TBSep.Position=UDim2.new(0.075,0,1,0); TBSep.BackgroundColor3=T.accent
-TBSep.BackgroundTransparency=0.6; TBSep.BorderSizePixel=0; TBSep.ZIndex=7; TBSep.Parent=TB
+local TBSep = Instance.new("Frame")
+TBSep.Size             = UDim2.new(0.85,0,0,1)
+TBSep.Position         = UDim2.new(0.075,0,1,0)
+TBSep.BackgroundColor3 = T.accent
+TBSep.BackgroundTransparency = 0.6
+TBSep.BorderSizePixel  = 0
+TBSep.ZIndex           = 7
+TBSep.Parent           = TB
 
--- animated dots
-local dotF=Instance.new("Frame"); dotF.Size=UDim2.new(0,40,0,8)
-dotF.Position=UDim2.new(0,12,0.5,-4); dotF.BackgroundTransparency=1; dotF.ZIndex=8; dotF.Parent=TB
-local dL=Instance.new("UIListLayout"); dL.FillDirection=Enum.FillDirection.Horizontal
-dL.Padding=UDim.new(0,5); dL.VerticalAlignment=Enum.VerticalAlignment.Center; dL.Parent=dotF
-local dotColors={Color3.fromRGB(255,80,80),Color3.fromRGB(255,200,60),Color3.fromRGB(80,220,100)}
+-- animated dot trio
+local dotFrame = Instance.new("Frame")
+dotFrame.Size             = UDim2.new(0,40,0,8)
+dotFrame.Position         = UDim2.new(0,12,0.5,-4)
+dotFrame.BackgroundTransparency = 1
+dotFrame.ZIndex           = 8
+dotFrame.Parent           = TB
+local dotLayout = Instance.new("UIListLayout")
+dotLayout.FillDirection = Enum.FillDirection.Horizontal
+dotLayout.Padding       = UDim.new(0,5)
+dotLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+dotLayout.Parent        = dotFrame
+
 for i=1,3 do
-    local d=Instance.new("Frame"); d.Size=UDim2.new(0,7,0,7)
-    d.BackgroundColor3=dotColors[i]; d.BackgroundTransparency=0.2
-    d.BorderSizePixel=0; d.ZIndex=8; d.Parent=dotF
-    Instance.new("UICorner",d).CornerRadius=UDim.new(1,0)
+    local d = Instance.new("Frame")
+    d.Size             = UDim2.new(0,7,0,7)
+    d.BackgroundColor3 = T.accent
+    d.BackgroundTransparency = 0.4
+    d.BorderSizePixel  = 0
+    d.ZIndex           = 8
+    d.Parent           = dotFrame
+    Instance.new("UICorner",d).CornerRadius = UDim.new(1,0)
     task.spawn(function()
-        local t=i*0.6
+        local t = i * 0.6
         while d and d.Parent do
-            t=t+task.wait(0.05)
-            d.BackgroundTransparency=0.1+math.abs(math.sin(t*1.2))*0.6
+            t = t + task.wait(0.05)
+            d.BackgroundTransparency = 0.2 + math.abs(math.sin(t*1.2))*0.65
         end
     end)
 end
 
-local TitleLbl=Instance.new("TextLabel"); TitleLbl.Text="STEAL AN EGG"
-TitleLbl.Size=UDim2.new(1,-110,0,18); TitleLbl.Position=UDim2.new(0,60,0,5)
-TitleLbl.BackgroundTransparency=1; TitleLbl.TextColor3=T.white; TitleLbl.TextSize=13
-TitleLbl.Font=Enum.Font.GothamBold; TitleLbl.TextXAlignment=Enum.TextXAlignment.Left
-TitleLbl.ZIndex=7; TitleLbl.Parent=TB
-local TG=Instance.new("UIGradient"); TG.Color=ColorSequence.new({
-    ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),
-    ColorSequenceKeypoint.new(1,T.accent),
-}); TG.Parent=TitleLbl
+local TitleLbl = Instance.new("TextLabel")
+TitleLbl.Text               = "DPM — STEAL AN EGG"
+TitleLbl.Size               = UDim2.new(1,-100,0,18)
+TitleLbl.Position           = UDim2.new(0,58,0,4)
+TitleLbl.BackgroundTransparency = 1
+TitleLbl.TextColor3         = T.accent
+TitleLbl.TextSize           = 12
+TitleLbl.Font               = Enum.Font.GothamBold
+TitleLbl.TextXAlignment     = Enum.TextXAlignment.Left
+TitleLbl.ZIndex             = 7
+TitleLbl.Parent             = TB
 
-local SubLbl=Instance.new("TextLabel"); SubLbl.Text="made by DPM  ·  v2  ·  Egg Cheats"
-SubLbl.Size=UDim2.new(1,-110,0,12); SubLbl.Position=UDim2.new(0,60,0,27)
-SubLbl.BackgroundTransparency=1; SubLbl.TextColor3=T.dim; SubLbl.TextSize=8
-SubLbl.Font=Enum.Font.Gotham; SubLbl.TextXAlignment=Enum.TextXAlignment.Left
-SubLbl.ZIndex=7; SubLbl.Parent=TB
+local TitleGrad = Instance.new("UIGradient")
+TitleGrad.Color  = ColorSequence.new({
+    ColorSequenceKeypoint.new(0,   T.accent),
+    ColorSequenceKeypoint.new(0.6, Color3.fromRGB(230,200,100)),
+    ColorSequenceKeypoint.new(1,   Color3.fromRGB(180,150,60)),
+})
+TitleGrad.Rotation = 0
+TitleGrad.Parent   = TitleLbl
 
-local MinBtn=Instance.new("TextButton"); MinBtn.Text="─"
-MinBtn.Size=UDim2.new(0,24,0,24); MinBtn.Position=UDim2.new(1,-58,0.5,-12)
-MinBtn.BackgroundColor3=Color3.fromRGB(28,28,38); MinBtn.BackgroundTransparency=0.2
-MinBtn.TextColor3=T.offWhite; MinBtn.TextSize=12; MinBtn.Font=Enum.Font.GothamBold
-MinBtn.BorderSizePixel=0; MinBtn.ZIndex=7; MinBtn.Parent=TB
-Instance.new("UICorner",MinBtn).CornerRadius=UDim.new(0,6)
+local SubLbl = Instance.new("TextLabel")
+SubLbl.Text               = "made by DPM  ·  "..GAME_NAME
+SubLbl.Size               = UDim2.new(1,-100,0,12)
+SubLbl.Position           = UDim2.new(0,58,0,26)
+SubLbl.BackgroundTransparency = 1
+SubLbl.TextColor3         = T.dim
+SubLbl.TextSize           = 8
+SubLbl.Font               = Enum.Font.Gotham
+SubLbl.TextXAlignment     = Enum.TextXAlignment.Left
+SubLbl.ZIndex             = 7
+SubLbl.Parent             = TB
 
-local CloseBtn=Instance.new("TextButton"); CloseBtn.Text="✕"
-CloseBtn.Size=UDim2.new(0,24,0,24); CloseBtn.Position=UDim2.new(1,-30,0.5,-12)
-CloseBtn.BackgroundColor3=T.red; CloseBtn.BackgroundTransparency=0.15
-CloseBtn.TextColor3=T.white; CloseBtn.TextSize=11; CloseBtn.Font=Enum.Font.GothamBold
-CloseBtn.BorderSizePixel=0; CloseBtn.ZIndex=7; CloseBtn.Parent=TB
-Instance.new("UICorner",CloseBtn).CornerRadius=UDim.new(0,6)
+local MinBtn = Instance.new("TextButton")
+MinBtn.Text             = "─"
+MinBtn.Size             = UDim2.new(0,24,0,24)
+MinBtn.Position         = UDim2.new(1,-56,0.5,-12)
+MinBtn.BackgroundColor3 = T.glassLight
+MinBtn.BackgroundTransparency = 0.3
+MinBtn.TextColor3       = T.offWhite
+MinBtn.TextSize         = 12
+MinBtn.Font             = Enum.Font.GothamBold
+MinBtn.BorderSizePixel  = 0
+MinBtn.ZIndex           = 7
+MinBtn.Parent           = TB
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0,6)
 
-local minimized=false
+local CloseBtn = Instance.new("TextButton")
+CloseBtn.Text             = "✕"
+CloseBtn.Size             = UDim2.new(0,24,0,24)
+CloseBtn.Position         = UDim2.new(1,-28,0.5,-12)
+CloseBtn.BackgroundColor3 = T.red
+CloseBtn.BackgroundTransparency = 0.2
+CloseBtn.TextColor3       = T.white
+CloseBtn.TextSize         = 11
+CloseBtn.Font             = Enum.Font.GothamBold
+CloseBtn.BorderSizePixel  = 0
+CloseBtn.ZIndex           = 7
+CloseBtn.Parent           = TB
+Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0,6)
+
+local minimized = false
 MinBtn.MouseButton1Click:Connect(function()
-    minimized=not minimized
-    TweenService:Create(MF,TweenInfo.new(0.3,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{
-        Size=minimized and UDim2.new(0,352,0,48) or UDim2.new(0,352,0,520)
+    minimized = not minimized
+    TweenService:Create(MF, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out),{
+        Size = minimized and UDim2.new(0,340,0,46) or UDim2.new(0,340,0,420)
     }):Play()
-    MinBtn.Text=minimized and "+" or "─"
-    TweenService:Create(blur,TweenInfo.new(0.3),{Size=minimized and 0 or 6}):Play()
-end)
-CloseBtn.MouseButton1Click:Connect(function()
-    TweenService:Create(MF,TweenInfo.new(0.3,Enum.EasingStyle.Back,Enum.EasingDirection.In),{
-        Size=UDim2.new(0,352,0,0),BackgroundTransparency=1
-    }):Play()
-    TweenService:Create(blur,TweenInfo.new(0.3),{Size=0}):Play()
-    task.delay(0.35,function() SG:Destroy() end)
+    MinBtn.Text = minimized and "+" or "─"
+    TweenService:Create(blur, TweenInfo.new(0.3), {Size = minimized and 0 or 8}):Play()
 end)
 
-for _,b in pairs({MinBtn,CloseBtn}) do
-    b.MouseEnter:Connect(function() TweenService:Create(b,TweenInfo.new(0.12),{BackgroundTransparency=0}):Play() end)
-    b.MouseLeave:Connect(function() TweenService:Create(b,TweenInfo.new(0.12),{BackgroundTransparency=0.15}):Play() end)
+CloseBtn.MouseButton1Click:Connect(function()
+    TweenService:Create(MF, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.In),{
+        Size = UDim2.new(0,340,0,0),
+        BackgroundTransparency = 1,
+    }):Play()
+    TweenService:Create(blur, TweenInfo.new(0.3), {Size = 0}):Play()
+    task.delay(0.35, function() SG:Destroy() end)
+end)
+
+for _,btn in pairs({MinBtn, CloseBtn}) do
+    btn.MouseEnter:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15),{BackgroundTransparency=0}):Play()
+    end)
+    btn.MouseLeave:Connect(function()
+        TweenService:Create(btn, TweenInfo.new(0.15),{BackgroundTransparency=0.2}):Play()
+    end)
 end
 
 -- =============================================
 --  DRAG
 -- =============================================
-local drag,dragStart,frameStart=false,nil,nil
+local drag, dragStart, frameStart = false, nil, nil
 local function startDrag(i)
     if i.UserInputType==Enum.UserInputType.Touch or
        i.UserInputType==Enum.UserInputType.MouseButton1 then
@@ -295,7 +314,9 @@ local function startDrag(i)
 end
 local function endDrag(i)
     if i.UserInputType==Enum.UserInputType.Touch or
-       i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end
+       i.UserInputType==Enum.UserInputType.MouseButton1 then
+        drag=false
+    end
 end
 TB.InputBegan:Connect(startDrag); TB.InputEnded:Connect(endDrag)
 UserInputService.InputChanged:Connect(function(i)
@@ -311,16 +332,26 @@ end)
 -- =============================================
 --  TAB BAR
 -- =============================================
-local TabBarOuter=Instance.new("Frame")
-TabBarOuter.Size=UDim2.new(1,0,0,34); TabBarOuter.Position=UDim2.new(0,0,0,48)
-TabBarOuter.BackgroundColor3=T.bar; TabBarOuter.BackgroundTransparency=0.25
-TabBarOuter.BorderSizePixel=0; TabBarOuter.ClipsDescendants=true
-TabBarOuter.ZIndex=5; TabBarOuter.Parent=MF
+local TabBarOuter = Instance.new("Frame")
+TabBarOuter.Size             = UDim2.new(1,0,0,34)
+TabBarOuter.Position         = UDim2.new(0,0,0,46)
+TabBarOuter.BackgroundColor3 = T.bar
+TabBarOuter.BackgroundTransparency = 0.25
+TabBarOuter.BorderSizePixel  = 0
+TabBarOuter.ClipsDescendants = true
+TabBarOuter.ZIndex           = 5
+TabBarOuter.Parent           = MF
 
-local TabScroll=Instance.new("ScrollingFrame")
+local TabSepLine = Instance.new("Frame")
+TabSepLine.Size=UDim2.new(1,0,0,1); TabSepLine.Position=UDim2.new(0,0,1,0)
+TabSepLine.BackgroundColor3=T.accent; TabSepLine.BackgroundTransparency=0.7
+TabSepLine.BorderSizePixel=0; TabSepLine.ZIndex=5; TabSepLine.Parent=TabBarOuter
+
+local TabScroll = Instance.new("ScrollingFrame")
 TabScroll.Size=UDim2.new(1,0,1,0); TabScroll.BackgroundTransparency=1
 TabScroll.BorderSizePixel=0; TabScroll.ScrollBarThickness=0
-TabScroll.CanvasSize=UDim2.new(0,0,0,0); TabScroll.AutomaticCanvasSize=Enum.AutomaticSize.X
+TabScroll.CanvasSize=UDim2.new(0,0,0,0)
+TabScroll.AutomaticCanvasSize=Enum.AutomaticSize.X
 TabScroll.ScrollingDirection=Enum.ScrollingDirection.X
 TabScroll.ZIndex=5; TabScroll.Parent=TabBarOuter
 
@@ -331,818 +362,875 @@ TabList.VerticalAlignment=Enum.VerticalAlignment.Center
 TabList.Padding=UDim.new(0,3); TabList.Parent=TabScroll
 
 local TabPad=Instance.new("UIPadding")
-TabPad.PaddingLeft=UDim.new(0,5); TabPad.PaddingRight=UDim.new(0,5); TabPad.Parent=TabScroll
+TabPad.PaddingLeft=UDim.new(0,5); TabPad.PaddingRight=UDim.new(0,5)
+TabPad.Parent=TabScroll
 
-local TabSepLine=Instance.new("Frame")
-TabSepLine.Size=UDim2.new(1,0,0,1); TabSepLine.Position=UDim2.new(0,0,1,0)
-TabSepLine.BackgroundColor3=T.accent; TabSepLine.BackgroundTransparency=0.7
-TabSepLine.BorderSizePixel=0; TabSepLine.ZIndex=5; TabSepLine.Parent=TabBarOuter
-
-local TabIndicator=Instance.new("Frame")
-TabIndicator.Size=UDim2.new(0,50,0,2); TabIndicator.Position=UDim2.new(0,5,1,-2)
-TabIndicator.BackgroundColor3=T.accent; TabIndicator.BorderSizePixel=0
-TabIndicator.ZIndex=8; TabIndicator.Parent=TabBarOuter
+local TabIndicator = Instance.new("Frame")
+TabIndicator.Size             = UDim2.new(0,38,0,2)
+TabIndicator.Position         = UDim2.new(0,5,1,-2)
+TabIndicator.BackgroundColor3 = T.accent
+TabIndicator.BackgroundTransparency = 0
+TabIndicator.BorderSizePixel  = 0
+TabIndicator.ZIndex           = 8
+TabIndicator.Parent           = TabBarOuter
 Instance.new("UICorner",TabIndicator).CornerRadius=UDim.new(1,0)
 
 -- =============================================
 --  CONTENT AREA
 -- =============================================
 local ContentArea=Instance.new("Frame")
-ContentArea.Size=UDim2.new(1,0,1,-82); ContentArea.Position=UDim2.new(0,0,0,82)
-ContentArea.BackgroundTransparency=1; ContentArea.ClipsDescendants=true
-ContentArea.BorderSizePixel=0; ContentArea.Parent=MF
+ContentArea.Size=UDim2.new(1,0,1,-80)
+ContentArea.Position=UDim2.new(0,0,0,80)
+ContentArea.BackgroundTransparency=1
+ContentArea.ClipsDescendants=true
+ContentArea.BorderSizePixel=0
+ContentArea.Parent=MF
 
 -- =============================================
---  TAB BUILDER
+--  TAB DEFINITIONS
 -- =============================================
-local tabDefs={
-    {id="EGGS",   label="EGGS"},
-    {id="TELE",   label="TELE"},
-    {id="FARM",   label="FARM"},
-    {id="FUSE",   label="FUSE"},
-    {id="SPEED",  label="SPEED"},
-    {id="VISUAL", label="VIS"},
-    {id="COMBAT", label="COMBAT"},
-    {id="MISC",   label="MISC"},
+local tabDefs = {
+    {id="FARM",    label="FARM"},
+    {id="EGGS",    label="EGGS"},
+    {id="FUSE",    label="FUSE"},
+    {id="SPEED",   label="SPD"},
+    {id="TROLL",   label="TRL"},
+    {id="COMBAT",  label="CMB"},
+    {id="VISUAL",  label="VIS"},
+    {id="WORLD",   label="WLD"},
+    {id="PLAYER",  label="PLYR"},
+    {id="MISC",    label="MISC"},
 }
 
-local tabs={}; local pages={}
+local tabs  = {}
+local pages = {}
 
 for _,def in ipairs(tabDefs) do
     local id=def.id; local lbl=def.label
+
     local page=Instance.new("Frame")
     page.Name=id; page.Size=UDim2.new(1,0,1,0)
     page.BackgroundTransparency=1; page.BorderSizePixel=0
     page.Visible=false; page.Parent=ContentArea
 
-    local lC=Instance.new("ScrollingFrame"); lC.Name="Left"
-    lC.Size=UDim2.new(0.5,-5,1,0); lC.Position=UDim2.new(0,3,0,0)
-    lC.BackgroundTransparency=1; lC.BorderSizePixel=0; lC.ScrollBarThickness=2
-    lC.ScrollBarImageColor3=T.accent; lC.CanvasSize=UDim2.new(0,0,0,0)
+    local lC=Instance.new("ScrollingFrame")
+    lC.Name="Left"; lC.Size=UDim2.new(0.5,-5,1,0)
+    lC.Position=UDim2.new(0,3,0,0); lC.BackgroundTransparency=1
+    lC.BorderSizePixel=0; lC.ScrollBarThickness=2
+    lC.ScrollBarImageColor3=Color3.fromRGB(60,60,40)
+    lC.CanvasSize=UDim2.new(0,0,0,0)
     lC.AutomaticCanvasSize=Enum.AutomaticSize.Y; lC.Parent=page
-    local ll=Instance.new("UIListLayout"); ll.Padding=UDim.new(0,5)
-    ll.HorizontalAlignment=Enum.HorizontalAlignment.Center
+    local ll=Instance.new("UIListLayout")
+    ll.Padding=UDim.new(0,5); ll.HorizontalAlignment=Enum.HorizontalAlignment.Center
     ll.SortOrder=Enum.SortOrder.LayoutOrder; ll.Parent=lC
-    local lp=Instance.new("UIPadding"); lp.PaddingTop=UDim.new(0,6)
-    lp.PaddingBottom=UDim.new(0,6); lp.Parent=lC
+    local lp=Instance.new("UIPadding")
+    lp.PaddingTop=UDim.new(0,6); lp.PaddingBottom=UDim.new(0,6); lp.Parent=lC
 
-    local rC=Instance.new("ScrollingFrame"); rC.Name="Right"
-    rC.Size=UDim2.new(0.5,-5,1,0); rC.Position=UDim2.new(0.5,2,0,0)
-    rC.BackgroundTransparency=1; rC.BorderSizePixel=0; rC.ScrollBarThickness=2
-    rC.ScrollBarImageColor3=T.accent; rC.CanvasSize=UDim2.new(0,0,0,0)
+    local rC=Instance.new("ScrollingFrame")
+    rC.Name="Right"; rC.Size=UDim2.new(0.5,-5,1,0)
+    rC.Position=UDim2.new(0.5,2,0,0); rC.BackgroundTransparency=1
+    rC.BorderSizePixel=0; rC.ScrollBarThickness=2
+    rC.ScrollBarImageColor3=Color3.fromRGB(60,60,40)
+    rC.CanvasSize=UDim2.new(0,0,0,0)
     rC.AutomaticCanvasSize=Enum.AutomaticSize.Y; rC.Parent=page
-    local rl=Instance.new("UIListLayout"); rl.Padding=UDim.new(0,5)
-    rl.HorizontalAlignment=Enum.HorizontalAlignment.Center
+    local rl=Instance.new("UIListLayout")
+    rl.Padding=UDim.new(0,5); rl.HorizontalAlignment=Enum.HorizontalAlignment.Center
     rl.SortOrder=Enum.SortOrder.LayoutOrder; rl.Parent=rC
-    local rp=Instance.new("UIPadding"); rp.PaddingTop=UDim.new(0,6)
-    rp.PaddingBottom=UDim.new(0,6); rp.Parent=rC
+    local rp=Instance.new("UIPadding")
+    rp.PaddingTop=UDim.new(0,6); rp.PaddingBottom=UDim.new(0,6); rp.Parent=rC
 
     pages[id]={page=page,left=lC,right=rC,count=0}
 
-    local btn=Instance.new("TextButton"); btn.Text=lbl
-    btn.Size=UDim2.new(0,52,0,26); btn.BackgroundColor3=T.tabOff
-    btn.BackgroundTransparency=0.35; btn.TextColor3=T.dim; btn.TextSize=9
-    btn.Font=Enum.Font.GothamBold; btn.BorderSizePixel=0; btn.ZIndex=6; btn.Parent=TabScroll
+    local btn=Instance.new("TextButton")
+    btn.Text=lbl; btn.Size=UDim2.new(0,38,0,26)
+    btn.BackgroundColor3=T.tabOff; btn.BackgroundTransparency=0.4
+    btn.TextColor3=T.dim; btn.TextSize=8; btn.Font=Enum.Font.GothamBold
+    btn.BorderSizePixel=0; btn.ZIndex=6; btn.Parent=TabScroll
     Instance.new("UICorner",btn).CornerRadius=UDim.new(0,6)
-    local bS=Instance.new("UIStroke"); bS.Color=T.accent; bS.Thickness=0.6
-    bS.Transparency=0.85; bS.Parent=btn
+    Instance.new("UIStroke",btn).Color=T.accent
 
     btn.MouseButton1Click:Connect(function()
         for _,d in ipairs(tabDefs) do
             pages[d.id].page.Visible=false
-            TweenService:Create(tabs[d.id],TweenInfo.new(0.15),{
-                BackgroundColor3=T.tabOff,BackgroundTransparency=0.35,TextColor3=T.dim
+            TweenService:Create(tabs[d.id],TweenInfo.new(0.18),{
+                BackgroundColor3=T.tabOff,
+                BackgroundTransparency=0.4,
+                TextColor3=T.dim,
             }):Play()
         end
         pages[id].page.Visible=true
-        TweenService:Create(btn,TweenInfo.new(0.15),{
-            BackgroundColor3=T.tabOn,BackgroundTransparency=0,TextColor3=Color3.fromRGB(10,10,14)
+        TweenService:Create(btn,TweenInfo.new(0.18),{
+            BackgroundColor3=T.tabOn,
+            BackgroundTransparency=0,
+            TextColor3=Color3.fromRGB(10,10,14),
         }):Play()
-        TweenService:Create(TabIndicator,TweenInfo.new(0.2,Enum.EasingStyle.Quart),{
-            Position=UDim2.new(0,btn.AbsolutePosition.X-TabBarOuter.AbsolutePosition.X,1,-2),
-            Size=UDim2.new(0,btn.AbsoluteSize.X,0,2),
+        TweenService:Create(TabIndicator, TweenInfo.new(0.22, Enum.EasingStyle.Quart),{
+            Position=UDim2.new(0, btn.AbsolutePosition.X - TabBarOuter.AbsolutePosition.X, 1, -2),
+            Size=UDim2.new(0, btn.AbsoluteSize.X, 0, 2),
         }):Play()
         page.Position=UDim2.new(0.04,0,0,0)
-        TweenService:Create(page,TweenInfo.new(0.2,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{
+        TweenService:Create(page,TweenInfo.new(0.22,Enum.EasingStyle.Quart,Enum.EasingDirection.Out),{
             Position=UDim2.new(0,0,0,0)
         }):Play()
     end)
+
     tabs[id]=btn
 end
 
-pages["EGGS"].page.Visible=true
-tabs["EGGS"].BackgroundColor3=T.tabOn
-tabs["EGGS"].BackgroundTransparency=0
-tabs["EGGS"].TextColor3=Color3.fromRGB(10,10,14)
+pages["FARM"].page.Visible=true
+tabs["FARM"].BackgroundColor3=T.tabOn
+tabs["FARM"].BackgroundTransparency=0
+tabs["FARM"].TextColor3=Color3.fromRGB(10,10,14)
+
+-- =============================================
+--  TOGGLE HELPER
+-- =============================================
+local function toggle(tabId,name,desc,cb)
+    local entry=pages[tabId]
+    local state=false
+    entry.count=entry.count+1
+    local col=(entry.count%2==1) and entry.left or entry.right
+
+    local card=Instance.new("Frame")
+    card.Name=name; card.Size=UDim2.new(1,0,0,58)
+    card.BackgroundColor3=T.glassCard
+    card.BackgroundTransparency=0.45
+    card.BorderSizePixel=0
+    card.LayoutOrder=entry.count; card.ZIndex=3; card.Parent=col
+    Instance.new("UICorner",card).CornerRadius=UDim.new(0,10)
+
+    local cGrad=Instance.new("UIGradient")
+    cGrad.Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(38,35,18)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(16,16,20)),
+    })
+    cGrad.Rotation=135; cGrad.Parent=card
+
+    local cStroke=Instance.new("UIStroke")
+    cStroke.Color=T.accent; cStroke.Thickness=0.8
+    cStroke.Transparency=0.88; cStroke.Parent=card
+
+    local shimmer=Instance.new("Frame")
+    shimmer.Size=UDim2.new(0.6,0,0,1)
+    shimmer.Position=UDim2.new(0.2,0,0,0)
+    shimmer.BackgroundColor3=T.accent
+    shimmer.BackgroundTransparency=0.65
+    shimmer.BorderSizePixel=0; shimmer.ZIndex=4; shimmer.Parent=card
+    Instance.new("UICorner",shimmer).CornerRadius=UDim.new(1,0)
+
+    local nm=Instance.new("TextLabel")
+    nm.Text=name; nm.Size=UDim2.new(1,-10,0,18)
+    nm.Position=UDim2.new(0,8,0,8); nm.BackgroundTransparency=1
+    nm.TextColor3=T.offWhite; nm.TextSize=10; nm.Font=Enum.Font.GothamBold
+    nm.TextXAlignment=Enum.TextXAlignment.Left
+    nm.TextTruncate=Enum.TextTruncate.AtEnd; nm.ZIndex=4; nm.Parent=card
+
+    local ds=Instance.new("TextLabel")
+    ds.Text=desc; ds.Size=UDim2.new(1,-10,0,12)
+    ds.Position=UDim2.new(0,8,0,25); ds.BackgroundTransparency=1
+    ds.TextColor3=T.dim; ds.TextSize=8; ds.Font=Enum.Font.Gotham
+    ds.TextXAlignment=Enum.TextXAlignment.Left
+    ds.TextTruncate=Enum.TextTruncate.AtEnd; ds.ZIndex=4; ds.Parent=card
+
+    local pillBG=Instance.new("Frame")
+    pillBG.Size=UDim2.new(0,32,0,17); pillBG.Position=UDim2.new(0,8,1,-24)
+    pillBG.BackgroundColor3=T.dimDark; pillBG.BackgroundTransparency=0.3
+    pillBG.BorderSizePixel=0; pillBG.ZIndex=4; pillBG.Parent=card
+    Instance.new("UICorner",pillBG).CornerRadius=UDim.new(1,0)
+
+    local pillStroke=Instance.new("UIStroke")
+    pillStroke.Color=T.accent; pillStroke.Thickness=0.7
+    pillStroke.Transparency=0.75; pillStroke.Parent=pillBG
+
+    local knob=Instance.new("Frame")
+    knob.Size=UDim2.new(0,13,0,13); knob.Position=UDim2.new(0,2,0.5,-6)
+    knob.BackgroundColor3=T.dim; knob.BackgroundTransparency=0
+    knob.BorderSizePixel=0; knob.ZIndex=5; knob.Parent=pillBG
+    Instance.new("UICorner",knob).CornerRadius=UDim.new(1,0)
+
+    local knobGlow=Instance.new("UIStroke")
+    knobGlow.Color=T.accent; knobGlow.Thickness=1.5
+    knobGlow.Transparency=1; knobGlow.Parent=knob
+
+    local stLbl=Instance.new("TextLabel")
+    stLbl.Text="OFF"; stLbl.Size=UDim2.new(0,26,0,17)
+    stLbl.Position=UDim2.new(0,42,1,-24); stLbl.BackgroundTransparency=1
+    stLbl.TextColor3=T.dim; stLbl.TextSize=8; stLbl.Font=Enum.Font.GothamBold
+    stLbl.TextXAlignment=Enum.TextXAlignment.Left; stLbl.ZIndex=4; stLbl.Parent=card
+
+    local btn=Instance.new("TextButton")
+    btn.Size=UDim2.new(1,0,1,0); btn.BackgroundTransparency=1
+    btn.Text=""; btn.ZIndex=5; btn.Parent=card
+
+    local function ripple()
+        local rip=Instance.new("Frame")
+        rip.Size=UDim2.new(0,0,0,0); rip.AnchorPoint=Vector2.new(0.5,0.5)
+        rip.Position=UDim2.new(0.5,0,0.5,0)
+        rip.BackgroundColor3=T.accent; rip.BackgroundTransparency=0.85
+        rip.BorderSizePixel=0; rip.ZIndex=6; rip.Parent=card
+        Instance.new("UICorner",rip).CornerRadius=UDim.new(1,0)
+        TweenService:Create(rip,TweenInfo.new(0.4,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
+            Size=UDim2.new(0,120,0,120),
+            BackgroundTransparency=1,
+        }):Play()
+        game:GetService("Debris"):AddItem(rip,0.45)
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        state=not state
+        ripple()
+        local ti=TweenInfo.new(0.22,Enum.EasingStyle.Back,Enum.EasingDirection.Out)
+        local tiF=TweenInfo.new(0.18,Enum.EasingStyle.Quad)
+        if state then
+            TweenService:Create(pillBG,    tiF,{BackgroundColor3=T.accent,BackgroundTransparency=0}):Play()
+            TweenService:Create(pillStroke,tiF,{Transparency=1}):Play()
+            TweenService:Create(knob,      ti, {Position=UDim2.new(1,-15,0.5,-6),BackgroundColor3=Color3.fromRGB(10,10,14)}):Play()
+            TweenService:Create(knobGlow,  tiF,{Transparency=0.3}):Play()
+            TweenService:Create(cStroke,   tiF,{Transparency=0.4,Color=T.accent}):Play()
+            TweenService:Create(nm,        tiF,{TextColor3=T.accent}):Play()
+            TweenService:Create(card,      tiF,{BackgroundTransparency=0.2}):Play()
+            TweenService:Create(shimmer,   tiF,{BackgroundTransparency=0.2}):Play()
+            stLbl.Text="ON"; stLbl.TextColor3=T.accent
+        else
+            TweenService:Create(pillBG,    tiF,{BackgroundColor3=T.dimDark,BackgroundTransparency=0.3}):Play()
+            TweenService:Create(pillStroke,tiF,{Transparency=0.75}):Play()
+            TweenService:Create(knob,      ti, {Position=UDim2.new(0,2,0.5,-6),BackgroundColor3=T.dim}):Play()
+            TweenService:Create(knobGlow,  tiF,{Transparency=1}):Play()
+            TweenService:Create(cStroke,   tiF,{Transparency=0.88,Color=T.accent}):Play()
+            TweenService:Create(nm,        tiF,{TextColor3=T.offWhite}):Play()
+            TweenService:Create(card,      tiF,{BackgroundTransparency=0.45}):Play()
+            TweenService:Create(shimmer,   tiF,{BackgroundTransparency=0.65}):Play()
+            stLbl.Text="OFF"; stLbl.TextColor3=T.dim
+        end
+        cb(state)
+    end)
+
+    card.BackgroundTransparency=1
+    task.delay(entry.count*0.04,function()
+        TweenService:Create(card,TweenInfo.new(0.3,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
+            BackgroundTransparency=0.45
+        }):Play()
+    end)
+end
+
+-- =============================================
+--  HELPER: find egg/pet objects
+-- =============================================
+local function findEggs()
+    local eggs={}
+    for _,v in pairs(workspace:GetDescendants()) do
+        local n=v.Name:lower()
+        if v:IsA("BasePart") or v:IsA("Model") then
+            if n:find("egg") then table.insert(eggs,v) end
+        end
+    end
+    return eggs
+end
+
+local function findFuseMachine()
+    for _,v in pairs(workspace:GetDescendants()) do
+        local n=v.Name:lower()
+        if n:find("fuse") then return v end
+    end
+    return nil
+end
+
+local function findTreadmill()
+    for _,v in pairs(workspace:GetDescendants()) do
+        local n=v.Name:lower()
+        if n:find("treadmill") then return v end
+    end
+    return nil
+end
+
+local function findPets()
+    local pets={}
+    for _,v in pairs(workspace:GetDescendants()) do
+        local n=v.Name:lower()
+        if n:find("pet") or n:find("animal") then
+            table.insert(pets,v)
+        end
+    end
+    return pets
+end
+
+local function closestEgg()
+    if not Root then return nil end
+    local best,bd=nil,math.huge
+    for _,v in pairs(findEggs()) do
+        local pos
+        if v:IsA("BasePart") then pos=v.Position
+        elseif v:IsA("Model") then
+            local hrp=v:FindFirstChild("HumanoidRootPart") or v.PrimaryPart
+            if hrp then pos=hrp.Position end
+        end
+        if pos then
+            local d=(pos-Root.Position).Magnitude
+            if d<bd then bd=d; best=v end
+        end
+    end
+    return best
+end
 
 -- =============================================
 --  NOTIFICATION
 -- =============================================
-local notifyQueue={}
-local function notify(msg,sub)
-    local n=Instance.new("Frame"); n.Size=UDim2.new(0,240,0,48)
-    n.Position=UDim2.new(0.5,-120,-0.14,0)
-    n.BackgroundColor3=Color3.fromRGB(14,10,22); n.BackgroundTransparency=0.15
+local function notify(msg, sub)
+    local n=Instance.new("Frame")
+    n.Size=UDim2.new(0,230,0,46); n.Position=UDim2.new(0.5,-115,-0.12,0)
+    n.BackgroundColor3=Color3.fromRGB(12,12,14); n.BackgroundTransparency=0.2
     n.BorderSizePixel=0; n.Parent=SG
-    Instance.new("UICorner",n).CornerRadius=UDim.new(0,12)
-    local nG=Instance.new("UIGradient"); nG.Color=ColorSequence.new({
-        ColorSequenceKeypoint.new(0,Color3.fromRGB(44,28,72)),
-        ColorSequenceKeypoint.new(1,Color3.fromRGB(10,10,16)),
-    }); nG.Rotation=135; nG.Parent=n
-    local nS=Instance.new("UIStroke"); nS.Color=T.accent
-    nS.Thickness=1; nS.Transparency=0.5; nS.Parent=n
-    local side=Instance.new("Frame"); side.Size=UDim2.new(0,3,1,-10)
+    Instance.new("UICorner",n).CornerRadius=UDim.new(0,10)
+
+    local nStroke=Instance.new("UIStroke"); nStroke.Color=T.accent
+    nStroke.Thickness=1; nStroke.Transparency=0.5; nStroke.Parent=n
+
+    local side=Instance.new("Frame"); side.Size=UDim2.new(0,2,1,-10)
     side.Position=UDim2.new(0,0,0,5); side.BackgroundColor3=T.accent
-    side.BackgroundTransparency=0; side.BorderSizePixel=0; side.Parent=n
-    Instance.new("UICorner",side).CornerRadius=UDim.new(0,3)
-    local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1,-14,0,sub and 18 or 28)
-    lbl.Position=UDim2.new(0,12,0,sub and 6 or 10); lbl.BackgroundTransparency=1
-    lbl.Text=msg; lbl.TextColor3=Color3.new(1,1,1); lbl.TextSize=11
+    side.BackgroundTransparency=0.1; side.BorderSizePixel=0; side.Parent=n
+    Instance.new("UICorner",side).CornerRadius=UDim.new(0,2)
+
+    local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1,-12,0,18)
+    lbl.Position=UDim2.new(0,10,0,6); lbl.BackgroundTransparency=1
+    lbl.Text=msg; lbl.TextColor3=T.accent; lbl.TextSize=11
     lbl.Font=Enum.Font.GothamBold; lbl.TextXAlignment=Enum.TextXAlignment.Left; lbl.Parent=n
+
     if sub then
-        local sl=Instance.new("TextLabel"); sl.Size=UDim2.new(1,-14,0,12)
-        sl.Position=UDim2.new(0,12,0,26); sl.BackgroundTransparency=1
+        local sl=Instance.new("TextLabel"); sl.Size=UDim2.new(1,-12,0,12)
+        sl.Position=UDim2.new(0,10,0,26); sl.BackgroundTransparency=1
         sl.Text=sub; sl.TextColor3=T.dim; sl.TextSize=8
         sl.Font=Enum.Font.Gotham; sl.TextXAlignment=Enum.TextXAlignment.Left; sl.Parent=n
     end
+
     TweenService:Create(n,TweenInfo.new(0.35,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{
-        Position=UDim2.new(0.5,-120,0.02,0)
+        Position=UDim2.new(0.5,-115,0.02,0)
     }):Play()
     task.delay(2.8,function()
         TweenService:Create(n,TweenInfo.new(0.25,Enum.EasingStyle.Back,Enum.EasingDirection.In),{
-            Position=UDim2.new(0.5,-120,-0.14,0),BackgroundTransparency=1
+            Position=UDim2.new(0.5,-115,-0.12,0),
+            BackgroundTransparency=1,
         }):Play()
         task.wait(0.3); n:Destroy()
     end)
 end
 
 -- =============================================
---  CARD HELPERS
+--  FARM TAB — core auto-farm loop
 -- =============================================
-local function ripple(card)
-    local r=Instance.new("Frame"); r.Size=UDim2.new(0,0,0,0)
-    r.AnchorPoint=Vector2.new(0.5,0.5); r.Position=UDim2.new(0.5,0,0.5,0)
-    r.BackgroundColor3=T.accent; r.BackgroundTransparency=0.7
-    r.BorderSizePixel=0; r.ZIndex=6; r.Parent=card
-    Instance.new("UICorner",r).CornerRadius=UDim.new(1,0)
-    TweenService:Create(r,TweenInfo.new(0.4,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
-        Size=UDim2.new(0,140,0,140),BackgroundTransparency=1
-    }):Play()
-    game:GetService("Debris"):AddItem(r,0.45)
-end
+toggle("FARM","Auto Farm","auto steals eggs and returns",function(on)
+    _G.dpm_farm=on
+    task.spawn(function()
+        while _G.dpm_farm do
+            if not Root or not Hum then task.wait(0.5) continue end
 
-local function makeCard(col,name,desc,h,lo)
-    local card=Instance.new("Frame"); card.Name=name
-    card.Size=UDim2.new(1,0,0,h or 58); card.BackgroundColor3=T.glassCard
-    card.BackgroundTransparency=0.42; card.BorderSizePixel=0
-    card.LayoutOrder=lo or 0; card.ZIndex=3; card.Parent=col
-    Instance.new("UICorner",card).CornerRadius=UDim.new(0,10)
-    local cG=Instance.new("UIGradient"); cG.Color=ColorSequence.new({
-        ColorSequenceKeypoint.new(0,Color3.fromRGB(32,24,50)),
-        ColorSequenceKeypoint.new(1,Color3.fromRGB(13,13,18)),
-    }); cG.Rotation=135; cG.Parent=card
-    local cS=Instance.new("UIStroke"); cS.Color=T.accent
-    cS.Thickness=0.8; cS.Transparency=0.84; cS.Parent=card
-    local shim=Instance.new("Frame"); shim.Size=UDim2.new(0.55,0,0,1)
-    shim.Position=UDim2.new(0.22,0,0,0); shim.BackgroundColor3=Color3.new(1,1,1)
-    shim.BackgroundTransparency=0.6; shim.BorderSizePixel=0; shim.ZIndex=4; shim.Parent=card
-    Instance.new("UICorner",shim).CornerRadius=UDim.new(1,0)
-    local nm=Instance.new("TextLabel"); nm.Text=name
-    nm.Size=UDim2.new(1,-10,0,18); nm.Position=UDim2.new(0,8,0,8)
-    nm.BackgroundTransparency=1; nm.TextColor3=T.offWhite; nm.TextSize=10
-    nm.Font=Enum.Font.GothamBold; nm.TextXAlignment=Enum.TextXAlignment.Left
-    nm.TextTruncate=Enum.TextTruncate.AtEnd; nm.ZIndex=4; nm.Parent=card
-    if desc then
-        local ds=Instance.new("TextLabel"); ds.Text=desc
-        ds.Size=UDim2.new(1,-10,0,12); ds.Position=UDim2.new(0,8,0,25)
-        ds.BackgroundTransparency=1; ds.TextColor3=T.dim; ds.TextSize=8
-        ds.Font=Enum.Font.Gotham; ds.TextXAlignment=Enum.TextXAlignment.Left
-        ds.TextTruncate=Enum.TextTruncate.AtEnd; ds.ZIndex=4; ds.Parent=card
-    end
-    return card,cS,nm
-end
+            -- step 1: find the closest egg
+            local egg=closestEgg()
+            if egg then
+                local ePos
+                if egg:IsA("BasePart") then ePos=egg.Position
+                elseif egg:IsA("Model") then
+                    local p=egg:FindFirstChild("HumanoidRootPart") or egg.PrimaryPart
+                    if p then ePos=p.Position end
+                end
 
-local function toggle(tabId,name,desc,cb)
-    local entry=pages[tabId]; local state=false
-    entry.count=entry.count+1
-    local col=(entry.count%2==1) and entry.left or entry.right
-    local card,cS,nm=makeCard(col,name,desc,58,entry.count)
+                if ePos then
+                    -- teleport to egg
+                    Root.CFrame=CFrame.new(ePos+Vector3.new(0,3,0))
+                    task.wait(0.3)
 
-    local pill=Instance.new("Frame"); pill.Size=UDim2.new(0,32,0,17)
-    pill.Position=UDim2.new(0,7,1,-24); pill.BackgroundColor3=T.dimDark
-    pill.BackgroundTransparency=0.3; pill.BorderSizePixel=0; pill.ZIndex=4; pill.Parent=card
-    Instance.new("UICorner",pill).CornerRadius=UDim.new(1,0)
-    local pS=Instance.new("UIStroke"); pS.Color=T.accent; pS.Thickness=0.7
-    pS.Transparency=0.75; pS.Parent=pill
-    local knob=Instance.new("Frame"); knob.Size=UDim2.new(0,13,0,13)
-    knob.Position=UDim2.new(0,2,0.5,-6); knob.BackgroundColor3=T.dim
-    knob.BorderSizePixel=0; knob.ZIndex=5; knob.Parent=pill
-    Instance.new("UICorner",knob).CornerRadius=UDim.new(1,0)
-    local kG=Instance.new("UIStroke"); kG.Color=T.accent
-    kG.Thickness=1.5; kG.Transparency=1; kG.Parent=knob
-    local stL=Instance.new("TextLabel"); stL.Text="OFF"
-    stL.Size=UDim2.new(0,26,0,17); stL.Position=UDim2.new(0,42,1,-24)
-    stL.BackgroundTransparency=1; stL.TextColor3=T.dim; stL.TextSize=8
-    stL.Font=Enum.Font.GothamBold; stL.TextXAlignment=Enum.TextXAlignment.Left
-    stL.ZIndex=4; stL.Parent=card
-    local btn=Instance.new("TextButton"); btn.Size=UDim2.new(1,0,1,0)
-    btn.BackgroundTransparency=1; btn.Text=""; btn.ZIndex=5; btn.Parent=card
+                    -- try to fire pick up remotes
+                    for _,v in pairs(game:GetDescendants()) do
+                        if v:IsA("RemoteEvent") then
+                            local n=v.Name:lower()
+                            if n:find("pickup") or n:find("steal") or n:find("grab") or n:find("collect") or n:find("egg") then
+                                pcall(function() v:FireServer(egg) end)
+                            end
+                        end
+                    end
 
-    btn.MouseButton1Click:Connect(function()
-        state=not state; ripple(card)
-        local ti=TweenInfo.new(0.22,Enum.EasingStyle.Back,Enum.EasingDirection.Out)
-        local tf=TweenInfo.new(0.18)
-        if state then
-            TweenService:Create(pill,tf,{BackgroundColor3=T.accent,BackgroundTransparency=0}):Play()
-            TweenService:Create(pS,tf,{Transparency=1}):Play()
-            TweenService:Create(knob,ti,{Position=UDim2.new(1,-15,0.5,-6),BackgroundColor3=Color3.fromRGB(10,10,14)}):Play()
-            TweenService:Create(kG,tf,{Transparency=0.5}):Play()
-            TweenService:Create(cS,tf,{Transparency=0.4}):Play()
-            TweenService:Create(nm,tf,{TextColor3=T.white}):Play()
-            TweenService:Create(card,tf,{BackgroundTransparency=0.15}):Play()
-            stL.Text="ON"; stL.TextColor3=T.accent
-        else
-            TweenService:Create(pill,tf,{BackgroundColor3=T.dimDark,BackgroundTransparency=0.3}):Play()
-            TweenService:Create(pS,tf,{Transparency=0.75}):Play()
-            TweenService:Create(knob,ti,{Position=UDim2.new(0,2,0.5,-6),BackgroundColor3=T.dim}):Play()
-            TweenService:Create(kG,tf,{Transparency=1}):Play()
-            TweenService:Create(cS,tf,{Transparency=0.84}):Play()
-            TweenService:Create(nm,tf,{TextColor3=T.offWhite}):Play()
-            TweenService:Create(card,tf,{BackgroundTransparency=0.42}):Play()
-            stL.Text="OFF"; stL.TextColor3=T.dim
-        end
-        cb(state)
-    end)
-end
+                    -- step 2: find our base/garden and return
+                    task.wait(0.3)
+                    for _,v in pairs(workspace:GetDescendants()) do
+                        local n=v.Name:lower()
+                        if v:IsA("BasePart") and (n:find("garden") or n:find("base") or n:find("plot") or n:find("nest")) then
+                            if v.Parent and v.Parent.Name:lower():find(LP.Name:lower()) or
+                               v:IsA("BasePart") and (n:find("mybase") or n:find("home")) then
+                                Root.CFrame=CFrame.new(v.Position+Vector3.new(0,3,0))
+                                break
+                            end
+                        end
+                    end
 
-local function actionBtn(tabId,name,desc,cb)
-    local entry=pages[tabId]
-    entry.count=entry.count+1
-    local col=(entry.count%2==1) and entry.left or entry.right
-    local card,cS,nm=makeCard(col,name,desc,58,entry.count)
-    local runBtn=Instance.new("TextButton"); runBtn.Text="RUN"
-    runBtn.Size=UDim2.new(0,42,0,18); runBtn.Position=UDim2.new(0,7,1,-24)
-    runBtn.BackgroundColor3=T.accentSoft; runBtn.BackgroundTransparency=0.2
-    runBtn.TextColor3=T.white; runBtn.TextSize=9; runBtn.Font=Enum.Font.GothamBold
-    runBtn.BorderSizePixel=0; runBtn.ZIndex=5; runBtn.Parent=card
-    Instance.new("UICorner",runBtn).CornerRadius=UDim.new(0,5)
-    local rS=Instance.new("UIStroke"); rS.Color=T.accent; rS.Thickness=0.7
-    rS.Transparency=0.6; rS.Parent=runBtn
-    runBtn.MouseButton1Click:Connect(function()
-        ripple(card)
-        TweenService:Create(runBtn,TweenInfo.new(0.12),{BackgroundColor3=T.accent,TextColor3=Color3.fromRGB(10,10,14)}):Play()
-        task.delay(0.22,function()
-            TweenService:Create(runBtn,TweenInfo.new(0.18),{BackgroundColor3=T.accentSoft,TextColor3=T.white}):Play()
-        end)
-        cb()
-    end)
-end
-
-local function slider(tabId,name,desc,minV,maxV,defV,cb)
-    local entry=pages[tabId]; entry.count=entry.count+1
-    local col=(entry.count%2==1) and entry.left or entry.right
-    local val=defV
-    local card,cS,nm=makeCard(col,name,desc,70,entry.count)
-
-    local valLbl=Instance.new("TextLabel"); valLbl.Text=tostring(val)
-    valLbl.Size=UDim2.new(0.35,0,0,16); valLbl.Position=UDim2.new(0.65,0,0,6)
-    valLbl.BackgroundTransparency=1; valLbl.TextColor3=T.accent; valLbl.TextSize=10
-    valLbl.Font=Enum.Font.GothamBold; valLbl.TextXAlignment=Enum.TextXAlignment.Right
-    valLbl.ZIndex=4; valLbl.Parent=card
-
-    local track=Instance.new("Frame"); track.Size=UDim2.new(1,-16,0,4)
-    track.Position=UDim2.new(0,8,0,42); track.BackgroundColor3=T.dimDark
-    track.BackgroundTransparency=0.3; track.BorderSizePixel=0; track.ZIndex=4; track.Parent=card
-    Instance.new("UICorner",track).CornerRadius=UDim.new(1,0)
-
-    local pct=(val-minV)/(maxV-minV)
-    local fill=Instance.new("Frame"); fill.Size=UDim2.new(pct,0,1,0)
-    fill.BackgroundColor3=T.accent; fill.BorderSizePixel=0
-    fill.ZIndex=5; fill.Parent=track
-    Instance.new("UICorner",fill).CornerRadius=UDim.new(1,0)
-
-    local thumb=Instance.new("Frame"); thumb.Size=UDim2.new(0,14,0,14)
-    thumb.Position=UDim2.new(pct,-7,0.5,-7); thumb.BackgroundColor3=T.accent
-    thumb.BorderSizePixel=0; thumb.ZIndex=6; thumb.Parent=track
-    Instance.new("UICorner",thumb).CornerRadius=UDim.new(1,0)
-
-    local mBtn=Instance.new("TextButton"); mBtn.Text="-"
-    mBtn.Size=UDim2.new(0,22,0,16); mBtn.Position=UDim2.new(0,8,1,-22)
-    mBtn.BackgroundColor3=T.accentSoft; mBtn.BackgroundTransparency=0.3
-    mBtn.TextColor3=T.white; mBtn.TextSize=13; mBtn.Font=Enum.Font.GothamBold
-    mBtn.BorderSizePixel=0; mBtn.ZIndex=5; mBtn.Parent=card
-    Instance.new("UICorner",mBtn).CornerRadius=UDim.new(0,5)
-
-    local pBtn=Instance.new("TextButton"); pBtn.Text="+"
-    pBtn.Size=UDim2.new(0,22,0,16); pBtn.Position=UDim2.new(0,34,1,-22)
-    pBtn.BackgroundColor3=T.accentSoft; pBtn.BackgroundTransparency=0.3
-    pBtn.TextColor3=T.white; pBtn.TextSize=13; pBtn.Font=Enum.Font.GothamBold
-    pBtn.BorderSizePixel=0; pBtn.ZIndex=5; pBtn.Parent=card
-    Instance.new("UICorner",pBtn).CornerRadius=UDim.new(0,5)
-
-    local step=math.max(1,math.floor((maxV-minV)/20))
-    local function update(v)
-        val=math.clamp(math.floor(v),minV,maxV)
-        valLbl.Text=tostring(val)
-        local p=(val-minV)/(maxV-minV)
-        TweenService:Create(fill,TweenInfo.new(0.1),{Size=UDim2.new(p,0,1,0)}):Play()
-        TweenService:Create(thumb,TweenInfo.new(0.1),{Position=UDim2.new(p,-7,0.5,-7)}):Play()
-        cb(val)
-    end
-    mBtn.MouseButton1Click:Connect(function() update(val-step) end)
-    pBtn.MouseButton1Click:Connect(function() update(val+step) end)
-
-    local ds2=false
-    track.InputBegan:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then ds2=true end
-    end)
-    track.InputEnded:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then ds2=false end
-    end)
-    UserInputService.InputChanged:Connect(function(i)
-        if ds2 and (i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement) then
-            local rel=i.Position.X-track.AbsolutePosition.X
-            local p=math.clamp(rel/track.AbsoluteSize.X,0,1)
-            update(minV+p*(maxV-minV))
-        end
-    end)
-end
-
--- =============================================
---  ░░░  EGGS TAB  ░░░
--- =============================================
-local p_eggs=pages["EGGS"]
-
-actionBtn("EGGS","Scan Live Eggs","finds all eggs in the map now",function()
-    local eggs=scanEggs()
-    if #eggs==0 then notify("No eggs found","walk around first"); return end
-    notify("Found "..#eggs.." eggs","tap TP buttons to teleport")
-    for _,v in pairs(p_eggs.left:GetChildren()) do
-        if v:IsA("Frame") and v.LayoutOrder>2 then v:Destroy() end
-    end
-    for _,v in pairs(p_eggs.right:GetChildren()) do
-        if v:IsA("Frame") and v.LayoutOrder>2 then v:Destroy() end
-    end
-    for i,egg in ipairs(eggs) do
-        local col=(i%2==1) and p_eggs.left or p_eggs.right
-        local card=Instance.new("Frame"); card.Name=egg.name
-        card.Size=UDim2.new(1,0,0,52); card.BackgroundColor3=T.glassCard
-        card.BackgroundTransparency=0.42; card.BorderSizePixel=0
-        card.LayoutOrder=i+2; card.ZIndex=3; card.Parent=col
-        Instance.new("UICorner",card).CornerRadius=UDim.new(0,10)
-        local cG=Instance.new("UIGradient"); cG.Color=ColorSequence.new({
-            ColorSequenceKeypoint.new(0,Color3.fromRGB(32,24,50)),
-            ColorSequenceKeypoint.new(1,Color3.fromRGB(13,13,18)),
-        }); cG.Rotation=135; cG.Parent=card
-        local cS=Instance.new("UIStroke"); cS.Color=T.accent
-        cS.Thickness=0.8; cS.Transparency=0.84; cS.Parent=card
-        local nm=Instance.new("TextLabel"); nm.Text="🥚 "..egg.name
-        nm.Size=UDim2.new(1,-48,0,16); nm.Position=UDim2.new(0,7,0,7)
-        nm.BackgroundTransparency=1; nm.TextColor3=T.offWhite; nm.TextSize=9
-        nm.Font=Enum.Font.GothamBold; nm.TextXAlignment=Enum.TextXAlignment.Left
-        nm.TextTruncate=Enum.TextTruncate.AtEnd; nm.ZIndex=4; nm.Parent=card
-        local dist=math.floor((egg.pos-Root.Position).Magnitude)
-        local dl=Instance.new("TextLabel"); dl.Text=dist.."st away"
-        dl.Size=UDim2.new(1,-48,0,12); dl.Position=UDim2.new(0,7,0,24)
-        dl.BackgroundTransparency=1; dl.TextColor3=T.dim; dl.TextSize=8
-        dl.Font=Enum.Font.Gotham; dl.TextXAlignment=Enum.TextXAlignment.Left; dl.ZIndex=4; dl.Parent=card
-        local tpBtn=Instance.new("TextButton"); tpBtn.Text="TP"
-        tpBtn.Size=UDim2.new(0,32,0,32); tpBtn.Position=UDim2.new(1,-38,0.5,-16)
-        tpBtn.BackgroundColor3=T.accentSoft; tpBtn.BackgroundTransparency=0.15
-        tpBtn.TextColor3=T.white; tpBtn.TextSize=9; tpBtn.Font=Enum.Font.GothamBold
-        tpBtn.BorderSizePixel=0; tpBtn.ZIndex=5; tpBtn.Parent=card
-        Instance.new("UICorner",tpBtn).CornerRadius=UDim.new(0,6)
-        local capturedEgg=egg
-        tpBtn.MouseButton1Click:Connect(function()
-            ripple(card)
-            TweenService:Create(tpBtn,TweenInfo.new(0.12),{BackgroundColor3=T.accent,TextColor3=Color3.fromRGB(10,10,14)}):Play()
-            task.delay(0.25,function()
-                TweenService:Create(tpBtn,TweenInfo.new(0.18),{BackgroundColor3=T.accentSoft,TextColor3=T.white}):Play()
-            end)
-            if Root then
-                Root.CFrame=CFrame.new(capturedEgg.pos+Vector3.new(0,4,0))
-                notify("Teleported","→ "..capturedEgg.name)
+                    -- fire place/hatch remotes
+                    task.wait(0.2)
+                    for _,v in pairs(game:GetDescendants()) do
+                        if v:IsA("RemoteEvent") then
+                            local n=v.Name:lower()
+                            if n:find("place") or n:find("hatch") or n:find("plant") or n:find("drop") then
+                                pcall(function() v:FireServer() end)
+                            end
+                        end
+                    end
+                end
             end
-        end)
-    end
+            task.wait(0.8)
+        end
+    end)
 end)
 
-actionBtn("EGGS","TP Nearest Egg","teleport to closest egg on map",function()
-    local eggs=scanEggs()
-    if #eggs>0 and Root then
-        Root.CFrame=CFrame.new(eggs[1].pos+Vector3.new(0,4,0))
-        notify("TP to nearest","→ "..eggs[1].name)
-    else notify("No eggs found","scan first") end
+toggle("FARM","Auto Treadmill","keeps treadmill maxed",function(on)
+    task.spawn(function()
+        while on do
+            local tread=findTreadmill()
+            if tread then
+                -- fire upgrade remote
+                for _,v in pairs(game:GetDescendants()) do
+                    if v:IsA("RemoteEvent") then
+                        local n=v.Name:lower()
+                        if n:find("treadmill") or n:find("upgrade") then
+                            pcall(function() v:FireServer(tread) end)
+                        end
+                    end
+                end
+                -- walk to it and stay
+                if Root then Root.CFrame=CFrame.new(tread.Position+Vector3.new(0,3,0)) end
+            end
+            task.wait(1)
+        end
+    end)
 end)
 
-toggle("EGGS","Auto Grab Eggs","auto-collects eggs within range",function(on)
-    RunService.Heartbeat:Connect(function()
-        if not on or not Root then return end
-        local r=_G.dpm_grabRadius or 20
+toggle("FARM","Auto Sell Pets","sells duplicate pets",function(on)
+    task.spawn(function()
+        while on do
+            for _,v in pairs(game:GetDescendants()) do
+                if v:IsA("RemoteEvent") then
+                    local n=v.Name:lower()
+                    if n:find("sell") or n:find("sellpet") then
+                        pcall(function() v:FireServer() end)
+                    end
+                end
+            end
+            task.wait(2)
+        end
+    end)
+end)
+
+toggle("FARM","Auto Collect Money","fires collect remotes",function(on)
+    task.spawn(function()
+        while on do
+            for _,v in pairs(game:GetDescendants()) do
+                if v:IsA("RemoteEvent") then
+                    local n=v.Name:lower()
+                    if n:find("collect") or n:find("money") or n:find("cash") or n:find("coin") then
+                        pcall(function() v:FireServer() end)
+                    end
+                end
+            end
+            task.wait(1)
+        end
+    end)
+end)
+
+toggle("FARM","Auto Upgrade Garden","upgrade garden auto",function(on)
+    task.spawn(function()
+        while on do
+            for _,v in pairs(game:GetDescendants()) do
+                if v:IsA("RemoteEvent") then
+                    local n=v.Name:lower()
+                    if n:find("garden") or n:find("upgrade") then
+                        pcall(function() v:FireServer() end)
+                    end
+                end
+            end
+            task.wait(2)
+        end
+    end)
+end)
+
+toggle("FARM","TP Egg Loop","rapid tp-steal cycle",function(on)
+    task.spawn(function()
+        while on and Root do
+            local egg=closestEgg()
+            if egg then
+                local pos
+                if egg:IsA("BasePart") then pos=egg.Position
+                elseif egg:IsA("Model") and egg.PrimaryPart then pos=egg.PrimaryPart.Position end
+                if pos then Root.CFrame=CFrame.new(pos+Vector3.new(0,2,0)) end
+            end
+            task.wait(0.2)
+        end
+    end)
+end)
+
+toggle("FARM","Anti Steal Guard","tp back if egg stolen",function(on)
+    task.spawn(function()
+        local lastPos=Root and Root.Position
+        while on do
+            if Root then
+                if (Root.Position-lastPos).Magnitude>50 then
+                    Root.CFrame=CFrame.new(lastPos)
+                    notify("DPM Guard","Returned to base!")
+                end
+                lastPos=Root.Position
+            end
+            task.wait(0.5)
+        end
+    end)
+end)
+
+toggle("FARM","Auto Hatch All","fires all hatch remotes",function(on)
+    task.spawn(function()
+        while on do
+            for _,v in pairs(game:GetDescendants()) do
+                if v:IsA("RemoteEvent") then
+                    local n=v.Name:lower()
+                    if n:find("hatch") or n:find("open") then
+                        pcall(function() v:FireServer() end)
+                    end
+                end
+            end
+            task.wait(1.5)
+        end
+    end)
+end)
+
+toggle("FARM","Farm Nearest Egg","tp to nearest every 0.5s",function(on)
+    task.spawn(function()
+        while on and Root do
+            local egg=closestEgg()
+            if egg then
+                local pos
+                if egg:IsA("BasePart") then pos=egg.Position
+                elseif egg:IsA("Model") and egg.PrimaryPart then pos=egg.PrimaryPart.Position end
+                if pos then Root.CFrame=CFrame.new(pos+Vector3.new(0,3,0)) end
+            end
+            task.wait(0.5)
+        end
+    end)
+end)
+
+-- =============================================
+--  EGGS TAB — egg spawning and manipulation
+-- =============================================
+toggle("EGGS","ESP All Eggs","shows all egg locations",function(on)
+    task.spawn(function()
+        while on do
+            for _,v in pairs(workspace:GetDescendants()) do
+                local n=v.Name:lower()
+                if n:find("egg") and (v:IsA("BasePart") or v:IsA("Model")) then
+                    local pos
+                    if v:IsA("BasePart") then pos=v.Position
+                    elseif v:IsA("Model") then
+                        local p=v.PrimaryPart or v:FindFirstChildOfClass("BasePart")
+                        if p then pos=p.Position end
+                    end
+                    if pos and not v:FindFirstChild("_dpmEggESP") then
+                        local bb=Instance.new("BillboardGui"); bb.Name="_dpmEggESP"
+                        bb.Size=UDim2.new(0,80,0,24); bb.StudsOffset=Vector3.new(0,3,0)
+                        bb.AlwaysOnTop=true; bb.Adornee=v:IsA("BasePart") and v or v.PrimaryPart
+                        bb.Parent=v
+                        local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1,0,1,0)
+                        lbl.BackgroundTransparency=1; lbl.Text="🥚 "..v.Name
+                        lbl.TextColor3=T.accent; lbl.TextSize=9
+                        lbl.Font=Enum.Font.GothamBold; lbl.Parent=bb
+                    end
+                end
+            end
+            task.wait(2)
+        end
+        -- cleanup
+        for _,v in pairs(workspace:GetDescendants()) do
+            local e=v:FindFirstChild("_dpmEggESP"); if e then e:Destroy() end
+        end
+    end)
+end)
+
+toggle("EGGS","TP to Rare Egg","scan and tp to best egg",function(on)
+    task.spawn(function()
+        while on and Root do
+            local best,bScore=nil,0
+            local rareNames={"secret","eternal","cosmic","legendary","epic","rare","golden","divine"}
+            for _,v in pairs(workspace:GetDescendants()) do
+                local n=v.Name:lower()
+                if n:find("egg") then
+                    for i,rn in pairs(rareNames) do
+                        if n:find(rn) then
+                            if (#rareNames-i+1)>bScore then bScore=#rareNames-i+1; best=v end
+                        end
+                    end
+                end
+            end
+            if best then
+                local pos
+                if best:IsA("BasePart") then pos=best.Position
+                elseif best:IsA("Model") and best.PrimaryPart then pos=best.PrimaryPart.Position end
+                if pos then
+                    Root.CFrame=CFrame.new(pos+Vector3.new(0,3,0))
+                    notify("DPM Eggs","Found: "..best.Name)
+                end
+            end
+            task.wait(3)
+        end
+    end)
+end)
+
+toggle("EGGS","Collect All Eggs","tp to every egg fast",function(on)
+    if not on or not Root then return end
+    local eggs=findEggs()
+    task.spawn(function()
+        for _,egg in pairs(eggs) do
+            if not on then break end
+            local pos
+            if egg:IsA("BasePart") then pos=egg.Position
+            elseif egg:IsA("Model") and egg.PrimaryPart then pos=egg.PrimaryPart.Position end
+            if pos then
+                Root.CFrame=CFrame.new(pos+Vector3.new(0,3,0))
+                for _,v in pairs(game:GetDescendants()) do
+                    if v:IsA("RemoteEvent") then
+                        local n=v.Name:lower()
+                        if n:find("pickup") or n:find("steal") or n:find("grab") then
+                            pcall(function() v:FireServer(egg) end)
+                        end
+                    end
+                end
+                task.wait(0.15)
+            end
+        end
+    end)
+end)
+
+toggle("EGGS","Print All Eggs","logs every egg to output",function(on)
+    if on then
+        local count=0
         for _,v in pairs(workspace:GetDescendants()) do
             local n=v.Name:lower()
             if n:find("egg") then
-                local pos=nil
-                if v:IsA("BasePart") then pos=v.Position
-                elseif v:IsA("Model") then
-                    local bp=v.PrimaryPart or v:FindFirstChildOfClass("BasePart")
-                    if bp then pos=bp.Position end
-                end
-                if pos and (pos-Root.Position).Magnitude<r then
-                    Root.CFrame=CFrame.new(pos+Vector3.new(0,2,0))
-                    fireRemote("grab",v); fireRemote("collect",v)
-                    fireRemote("steal",v); fireRemote("pick",v)
-                    pcall(function()
-                        if v:IsA("BasePart") then
-                            local t=v:FindFirstChildOfClass("TouchTransmitter")
-                            if t then t:FireServer() end
-                        end
-                    end)
-                end
+                print("[DPM EGG] "..v:GetFullName())
+                count=count+1
             end
         end
-    end)
-end)
-
-slider("EGGS","Grab Radius","how close to auto-grab (studs)",5,100,20,function(v)
-    _G.dpm_grabRadius=v
-end)
-
-toggle("EGGS","Egg Magnet","pulls all eggs toward you",function(on)
-    RunService.Heartbeat:Connect(function()
-        if not on or not Root then return end
-        for _,v in pairs(workspace:GetDescendants()) do
-            if v:IsA("BasePart") and v.Name:lower():find("egg") and not v.Anchored then
-                local bv=v:FindFirstChild("_dpmBV") or Instance.new("BodyVelocity")
-                bv.Name="_dpmBV"; bv.MaxForce=Vector3.new(1e4,1e4,1e4)
-                bv.Velocity=(Root.Position-v.Position).Unit*35
-                bv.Parent=v; game:GetService("Debris"):AddItem(bv,0.12)
-            end
-        end
-    end)
-end)
-
-toggle("EGGS","ESP Eggs","labels above every egg",function(on)
-    local esps={}
-    local function tagEgg(v)
-        local pos=nil; local part=nil
-        if v:IsA("Model") then part=v.PrimaryPart or v:FindFirstChildOfClass("BasePart")
-        elseif v:IsA("BasePart") then part=v end
-        if not part then return end
-        if part:FindFirstChild("_dpmEggESP") then return end
-        local bb=Instance.new("BillboardGui"); bb.Name="_dpmEggESP"
-        bb.Size=UDim2.new(0,100,0,26); bb.StudsOffset=Vector3.new(0,3,0)
-        bb.AlwaysOnTop=true; bb.Adornee=part; bb.Parent=part
-        local bg=Instance.new("Frame"); bg.Size=UDim2.new(1,0,1,0)
-        bg.BackgroundColor3=Color3.fromRGB(12,8,22); bg.BackgroundTransparency=0.4
-        bg.BorderSizePixel=0; bg.Parent=bb
-        Instance.new("UICorner",bg).CornerRadius=UDim.new(0,5)
-        local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1,0,1,0)
-        lbl.BackgroundTransparency=1; lbl.Text="🥚 "..v.Name
-        lbl.TextColor3=T.accent; lbl.TextSize=10
-        lbl.Font=Enum.Font.GothamBold; lbl.Parent=bb
-        table.insert(esps,bb)
+        print("[DPM] Found "..count.." egg objects")
     end
+end)
+
+toggle("EGGS","Egg Radar","shows closest egg dist",function(on)
+    local radarLbl=SG:FindFirstChild("_dpmEggRadar")
     if on then
-        for _,v in pairs(workspace:GetDescendants()) do
-            if v.Name:lower():find("egg") then tagEgg(v) end
+        if not radarLbl then
+            local fr=Instance.new("Frame"); fr.Name="_dpmEggRadar"
+            fr.Size=UDim2.new(0,160,0,36); fr.Position=UDim2.new(0,10,0.5,-18)
+            fr.BackgroundColor3=Color3.fromRGB(10,10,14); fr.BackgroundTransparency=0.2
+            fr.BorderSizePixel=0; fr.Parent=SG
+            Instance.new("UICorner",fr).CornerRadius=UDim.new(0,8)
+            local rStroke=Instance.new("UIStroke"); rStroke.Color=T.accent; rStroke.Thickness=1; rStroke.Parent=fr
+            local rl=Instance.new("TextLabel"); rl.Name="lbl"
+            rl.Size=UDim2.new(1,0,1,0); rl.BackgroundTransparency=1
+            rl.TextColor3=T.accent; rl.TextSize=10; rl.Font=Enum.Font.GothamBold; rl.Parent=fr
+            radarLbl=fr
         end
-        workspace.DescendantAdded:Connect(function(v)
-            if on and v.Name:lower():find("egg") then task.wait(0.1); tagEgg(v) end
+        task.spawn(function()
+            while on do
+                local egg=closestEgg()
+                local lbl=radarLbl:FindFirstChild("lbl")
+                if egg and lbl and Root then
+                    local pos
+                    if egg:IsA("BasePart") then pos=egg.Position
+                    elseif egg:IsA("Model") and egg.PrimaryPart then pos=egg.PrimaryPart.Position end
+                    if pos then
+                        local dist=math.floor((pos-Root.Position).Magnitude)
+                        lbl.Text="🥚 "..egg.Name.."\n"..dist.."st away"
+                    end
+                end
+                task.wait(0.5)
+            end
         end)
     else
-        for _,bb in pairs(esps) do bb:Destroy() end; esps={}
+        if radarLbl then radarLbl:Destroy() end
+    end
+end)
+
+toggle("EGGS","No Egg Physics","anchor all eggs",function(on)
+    for _,v in pairs(workspace:GetDescendants()) do
+        local n=v.Name:lower()
+        if n:find("egg") and v:IsA("BasePart") then
+            v.Anchored=on
+        end
+    end
+end)
+
+toggle("EGGS","Highlight Eggs","gold outline all eggs",function(on)
+    for _,v in pairs(workspace:GetDescendants()) do
+        local n=v.Name:lower()
+        if n:find("egg") and v:IsA("BasePart") then
+            if on then
+                local s=Instance.new("SelectionBox"); s.Name="_dpmEggHL"
+                s.Adornee=v; s.Color3=T.accent; s.LineThickness=0.05
+                s.SurfaceTransparency=0.7; s.SurfaceColor3=T.accent; s.Parent=v
+            else
+                local s=v:FindFirstChild("_dpmEggHL"); if s then s:Destroy() end
+            end
+        end
     end
 end)
 
 -- =============================================
---  ░░░  TELE TAB  ░░░
+--  FUSE TAB — luck manipulation
 -- =============================================
-actionBtn("TELE","TP Nearest Egg","go to closest egg instantly",function()
-    local eggs=scanEggs()
-    if #eggs>0 and Root then
-        Root.CFrame=CFrame.new(eggs[1].pos+Vector3.new(0,4,0))
-        notify("TP to nearest","→ "..eggs[1].name)
-    else notify("No eggs found","walk around map") end
+toggle("FUSE","Max Fuse Luck","set fuse luck values max",function(on)
+    if on then
+        for _,v in pairs(game:GetDescendants()) do
+            if v:IsA("NumberValue") or v:IsA("IntValue") then
+                local n=v.Name:lower()
+                if n:find("luck") or n:find("fuse") or n:find("chance") or n:find("rarity") or n:find("weight") then
+                    pcall(function() v.Value=999999 end)
+                    print("[DPM FUSE] Set "..v:GetFullName().." = 999999")
+                end
+            end
+        end
+        notify("DPM Fuse","Luck values maxed!")
+    end
 end)
 
-actionBtn("TELE","Loop All Eggs","tp through every egg on map",function()
+toggle("FUSE","Auto Fuse Loop","fires fuse remote every 2s",function(on)
     task.spawn(function()
-        local eggs=scanEggs()
-        if #eggs==0 then notify("No eggs","nothing to loop"); return end
-        notify("Looping "..#eggs.." eggs","collecting all")
-        for _,e in pairs(eggs) do
-            if Root then
-                Root.CFrame=CFrame.new(e.pos+Vector3.new(0,3,0))
-                fireRemote("grab",e.obj); fireRemote("collect",e.obj)
-                fireRemote("steal",e.obj); fireRemote("pick",e.obj)
+        while on do
+            local fuse=findFuseMachine()
+            if fuse and Root then
+                Root.CFrame=CFrame.new(fuse.Position+Vector3.new(0,3,0))
             end
-            task.wait(0.35)
+            for _,v in pairs(game:GetDescendants()) do
+                if v:IsA("RemoteEvent") then
+                    local n=v.Name:lower()
+                    if n:find("fuse") then
+                        pcall(function() v:FireServer() end)
+                    end
+                end
+            end
+            task.wait(2)
         end
-        notify("Loop done","visited "..#eggs.." eggs")
     end)
 end)
 
-actionBtn("TELE","TP to Spawn","go to spawn location",function()
-    if not Root then return end
-    local sp=workspace:FindFirstChild("SpawnLocation") or workspace:FindFirstChild("Spawn")
-        or workspace:FindFirstChild("SpawnArea")
-    if sp and sp:IsA("BasePart") then
-        Root.CFrame=CFrame.new(sp.Position+Vector3.new(0,5,0)); notify("Teleported","to spawn")
-    else Root.CFrame=CFrame.new(0,10,0); notify("Teleported","to world center") end
-end)
-
-actionBtn("TELE","TP to Fuse Area","find the fuse/merge zone",function()
-    if not Root then return end
-    for _,v in pairs(workspace:GetDescendants()) do
-        if v:IsA("BasePart") and (v.Name:lower():find("fuse") or v.Name:lower():find("merge")
-            or v.Name:lower():find("combine") or v.Name:lower():find("evolve")) then
-            Root.CFrame=CFrame.new(v.Position+Vector3.new(0,5,0)); notify("Teleported","to fuse area"); return
-        end
-    end
-    notify("Fuse area not found","explore map manually")
-end)
-
-actionBtn("TELE","TP to Shop","find the shop zone",function()
-    if not Root then return end
-    for _,v in pairs(workspace:GetDescendants()) do
-        if v:IsA("BasePart") and (v.Name:lower():find("shop") or v.Name:lower():find("store")
-            or v.Name:lower():find("buy") or v.Name:lower():find("sell")) then
-            Root.CFrame=CFrame.new(v.Position+Vector3.new(0,5,0)); notify("Teleported","to shop"); return
-        end
-    end
-    notify("Shop not found","explore map")
-end)
-
-toggle("TELE","Auto Collect Spawns","tp to every new egg that spawns",function(on)
-    workspace.DescendantAdded:Connect(function(v)
-        if on and Root and v.Name:lower():find("egg") then
-            task.wait(0.15)
-            local pos=nil
-            if v:IsA("BasePart") then pos=v.Position
-            elseif v:IsA("Model") then
-                local bp=v.PrimaryPart or v:FindFirstChildOfClass("BasePart")
-                if bp then pos=bp.Position end
-            end
+toggle("FUSE","TP to Fuse Machine","teleport to fuse machine",function(on)
+    if on and Root then
+        local fuse=findFuseMachine()
+        if fuse then
+            local pos=fuse:IsA("BasePart") and fuse.Position or
+                      (fuse:IsA("Model") and fuse.PrimaryPart and fuse.PrimaryPart.Position)
             if pos then
                 Root.CFrame=CFrame.new(pos+Vector3.new(0,3,0))
-                fireRemote("grab",v); fireRemote("collect",v); fireRemote("steal",v)
-                notify("Auto collected","new egg: "..v.Name)
+                notify("DPM Fuse","Teleported to fuse machine")
             end
-        end
-    end)
-end)
-
-actionBtn("TELE","TP to Random Player","teleport to random player",function()
-    local plrs=Players:GetPlayers()
-    local others={}
-    for _,p in pairs(plrs) do
-        if p~=LP and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-            table.insert(others,p)
+        else
+            notify("DPM Fuse","Fuse machine not found")
         end
     end
-    if #others==0 then notify("No players","you're alone"); return end
-    local target=others[math.random(1,#others)]
-    Root.CFrame=target.Character.HumanoidRootPart.CFrame*CFrame.new(0,0,-3)
-    notify("Teleported","→ "..target.Name)
 end)
 
--- =============================================
---  ░░░  FARM TAB  ░░░
--- =============================================
-local farmRunning=false
-
-toggle("FARM","Auto Farm Loop","continuously farms all eggs",function(on)
-    farmRunning=on
+toggle("FUSE","Print Fuse Remotes","log all fuse remotes",function(on)
     if on then
-        task.spawn(function()
-            notify("Auto Farm","started")
-            while farmRunning do
-                local eggs=scanEggs()
-                for _,e in pairs(eggs) do
-                    if not farmRunning then break end
-                    if Root then
-                        Root.CFrame=CFrame.new(e.pos+Vector3.new(0,3,0)); task.wait(0.1)
-                        fireRemote("grab",e.obj); fireRemote("collect",e.obj)
-                        fireRemote("steal",e.obj); fireRemote("pick",e.obj); fireRemote("egg",e.obj)
-                        pcall(function()
-                            for _,p in pairs(workspace:GetDescendants()) do
-                                if p:IsA("BasePart") and (p.Position-Root.Position).Magnitude<5 then
-                                    local t=p:FindFirstChildOfClass("TouchTransmitter")
-                                    if t then t:FireServer() end
-                                end
-                            end
-                        end)
-                    end
-                    task.wait(0.3)
+        for _,v in pairs(game:GetDescendants()) do
+            if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+                local n=v.Name:lower()
+                if n:find("fuse") or n:find("luck") or n:find("merge") then
+                    print("[DPM FUSE REMOTE] "..v:GetFullName())
                 end
-                task.wait(1)
             end
-            notify("Auto Farm","stopped")
-        end)
+        end
     end
 end)
 
-toggle("FARM","Auto Steal Eggs","steals eggs from other players",function(on)
-    RunService.Heartbeat:Connect(function()
-        if not on or not Root then return end
-        for _,p in pairs(Players:GetPlayers()) do
-            if p~=LP and p.Character then
-                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
-                if hrp and (hrp.Position-Root.Position).Magnitude<15 then
-                    for _,v in pairs(p.Character:GetDescendants()) do
-                        if v.Name:lower():find("egg") then
-                            fireRemote("steal",v,p); fireRemote("grab",v,p)
-                        end
+toggle("FUSE","Set All Luck=9999","every luck value in game",function(on)
+    if on then
+        for _,v in pairs(game:GetDescendants()) do
+            if v.Name:lower():find("luck") then
+                pcall(function()
+                    if v:IsA("NumberValue") or v:IsA("IntValue") then v.Value=9999 end
+                end)
+            end
+        end
+    end
+end)
+
+toggle("FUSE","Fuse Spam","fires fuse 10x fast",function(on)
+    if on then
+        for i=1,10 do
+            for _,v in pairs(game:GetDescendants()) do
+                if v:IsA("RemoteEvent") and v.Name:lower():find("fuse") then
+                    pcall(function() v:FireServer() end)
+                end
+            end
+            task.wait(0.1)
+        end
+    end
+end)
+
+toggle("FUSE","Watch Fuse Values","prints luck every 3s",function(on)
+    task.spawn(function()
+        while on do
+            for _,v in pairs(game:GetDescendants()) do
+                if v:IsA("NumberValue") or v:IsA("IntValue") then
+                    local n=v.Name:lower()
+                    if n:find("luck") or n:find("fuse") or n:find("weight") then
+                        print("[DPM LUCK] "..v.Name.." = "..tostring(v.Value))
                     end
                 end
             end
+            task.wait(3)
         end
-    end)
-end)
-
-toggle("FARM","Auto Hatch","auto-hatches eggs you carry",function(on)
-    RunService.Heartbeat:Connect(function()
-        if not on then return end
-        fireRemote("hatch"); fireRemote("open")
-        if LP.Character then
-            for _,v in pairs(LP.Character:GetDescendants()) do
-                if v.Name:lower():find("egg") then
-                    fireRemote("hatch",v); fireRemote("open",v)
-                end
-            end
-        end
-    end)
-end)
-
-toggle("FARM","Auto Sell Pets","auto-sells duplicate pets",function(on)
-    RunService.Heartbeat:Connect(function()
-        if not on then return end
-        fireRemote("sell"); fireRemote("sellall")
-        pcall(function()
-            local inv=LP:FindFirstChild("Inventory") or LP:FindFirstChild("Pets")
-            if inv then for _,v in pairs(inv:GetChildren()) do fireRemote("sell",v) end end
-        end)
-    end)
-end)
-
-toggle("FARM","Auto Rebirth","auto-rebirths when ready",function(on)
-    RunService.Heartbeat:Connect(function()
-        if not on then return end
-        fireRemote("rebirth"); fireRemote("prestige")
-    end)
-end)
-
-actionBtn("FARM","Single Farm Run","one full egg sweep now",function()
-    task.spawn(function()
-        local eggs=scanEggs()
-        notify("Farm run","collecting "..#eggs.." eggs")
-        for _,e in pairs(eggs) do
-            if Root then
-                Root.CFrame=CFrame.new(e.pos+Vector3.new(0,3,0)); task.wait(0.25)
-                fireRemote("grab",e.obj); fireRemote("collect",e.obj)
-                fireRemote("steal",e.obj); fireRemote("egg",e.obj)
-            end
-        end
-        notify("Farm run done","swept "..#eggs.." eggs")
-    end)
-end)
-
-actionBtn("FARM","Dump Remotes","prints all remotes to console",function()
-    local found={}
-    for _,v in pairs(game:GetDescendants()) do
-        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-            print("[DPM-FARM] "..v:GetFullName()); table.insert(found,v.Name)
-        end
-    end
-    notify("Remotes: "..#found,"check console")
-end)
-
-toggle("FARM","Max Speed Farm","sets speed high for farming",function(on)
-    if Hum then Hum.WalkSpeed=on and 80 or 16 end
-    RunService.Heartbeat:Connect(function()
-        if on and Hum then Hum.WalkSpeed=80 end
     end)
 end)
 
 -- =============================================
---  ░░░  FUSE TAB  ░░░
+--  SPEED TAB
 -- =============================================
-slider("FUSE","Fuse Luck %","sets luck for fusion results",1,100,50,function(v)
-    _G.dpm_fuseLuck=v
-    pcall(function() LP:SetAttribute("Luck",v); LP:SetAttribute("FuseLuck",v) end)
-    pcall(function()
-        local ls=LP:FindFirstChild("leaderstats")
-        if ls then for _,sv in pairs(ls:GetChildren()) do
-            if sv.Name:lower():find("luck") and sv:IsA("NumberValue") then sv.Value=v end
-        end end
-    end)
+toggle("SPEED","Speed x2","double walkspeed",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 32 or 16 end end)
+end)
+toggle("SPEED","Speed x3","triple speed",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 48 or 16 end end)
+end)
+toggle("SPEED","Speed x5","5× speed",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 80 or 16 end end)
+end)
+toggle("SPEED","Speed x10","10× for egg runs",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 160 or 16 end end)
+end)
+toggle("SPEED","Speed x20","ultra fast runs",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 320 or 16 end end)
+end)
+toggle("SPEED","Speed x50","server stressing",function(on)
+    RunService.Heartbeat:Connect(function() if Hum then Hum.WalkSpeed=on and 800 or 16 end end)
 end)
 
-toggle("FUSE","Max Luck Always","forces luck=100 every frame",function(on)
-    RunService.Heartbeat:Connect(function()
-        if not on then return end
-        pcall(function()
-            LP:SetAttribute("Luck",100); LP:SetAttribute("FuseLuck",100)
-            LP:SetAttribute("PetLuck",100); LP:SetAttribute("Multiplier",100)
-        end)
-        pcall(function()
-            local ls=LP:FindFirstChild("leaderstats")
-            if ls then for _,v in pairs(ls:GetChildren()) do
-                if v.Name:lower():find("luck") and v:IsA("NumberValue") then v.Value=100 end
-            end end
-        end)
-    end)
-end)
-
-toggle("FUSE","Hook Fuse Remote","injects luck into fuse calls",function(on)
-    _G.dpm_fusehook=on
-    pcall(function()
-        local mt=getrawmetatable(game); local old=mt.__namecall
-        setreadonly(mt,false)
-        mt.__namecall=newcclosure(function(self,...)
-            local args={...}; local method=getnamecallmethod()
-            if _G.dpm_fusehook and (method=="FireServer" or method=="InvokeServer") then
-                local n=tostring(self.Name):lower()
-                if n:find("fuse") or n:find("merge") or n:find("combine") or n:find("evolve") then
-                    table.insert(args,100); table.insert(args,{luck=100,bonus=100,multiplier=10})
-                    notify("Fuse hooked","luck injected")
-                end
-            end
-            return old(self,unpack(args))
-        end)
-        setreadonly(mt,true)
-    end)
-end)
-
-actionBtn("FUSE","Auto Fuse x20","fires fuse remote 20 times",function()
-    task.spawn(function()
-        local fired=0
-        for i=1,20 do
-            task.wait(0.2)
-            if fireRemote("fuse","auto","all",100) then fired=fired+1 end
-            if fireRemote("merge","auto","all",100) then fired=fired+1 end
-            if fireRemote("combine","auto","all",100) then fired=fired+1 end
-        end
-        notify("Auto Fuse done","fired "..fired.." remotes")
-    end)
-end)
-
-toggle("FUSE","Instant Fuse","skips fuse wait timer",function(on)
-    RunService.Heartbeat:Connect(function()
-        if not on then return end
-        pcall(function()
-            for _,v in pairs(LP.PlayerGui:GetDescendants()) do
-                if v:IsA("NumberValue") and v.Name:lower():find("timer") then v.Value=0 end
-            end
-        end)
-    end)
-end)
-
--- =============================================
---  ░░░  SPEED TAB  ░░░
--- =============================================
-slider("SPEED","Walk Speed","set your walk speed",8,250,16,function(v)
-    if Hum then Hum.WalkSpeed=v end
-end)
-
-slider("SPEED","Jump Power","set your jump height",10,400,50,function(v)
-    if Hum then Hum.JumpPower=v end
-end)
-
-toggle("SPEED","Infinite Jump","jump with no limit",function(on)
-    _G.dpm_ij=on
-end)
+local ijOn=false
+toggle("SPEED","Infinite Jump","unlimited jumping",function(on) ijOn=on end)
 UserInputService.JumpRequest:Connect(function()
-    if _G.dpm_ij and Hum then Hum:ChangeState(Enum.HumanoidStateType.Jumping) end
+    if ijOn and Hum then Hum:ChangeState(Enum.HumanoidStateType.Jumping) end
 end)
 
-toggle("SPEED","No Clip","phase through all walls",function(on)
-    _G.dpm_noclip=on
+toggle("SPEED","High Jump x5","huge jump power",function(on)
+    if Hum then Hum.JumpPower=on and 250 or 50 end
+end)
+toggle("SPEED","No Clip","phase through walls",function(on)
     RunService.Stepped:Connect(function()
-        if _G.dpm_noclip and Char then
+        if on and Char then
             for _,p in pairs(Char:GetDescendants()) do
                 if p:IsA("BasePart") then p.CanCollide=false end
             end
         end
     end)
 end)
-
-toggle("SPEED","Low Gravity","float around slowly",function(on)
-    workspace.Gravity=on and 22 or 196.2
+toggle("SPEED","Low Gravity","float across map",function(on)
+    workspace.Gravity=on and 28 or 196.2
+end)
+toggle("SPEED","Zero Gravity","weightless drift",function(on)
+    workspace.Gravity=on and 0.1 or 196.2
 end)
 
-toggle("SPEED","Zero Gravity","full float mode",function(on)
-    workspace.Gravity=on and 0.01 or 196.2
-end)
-
--- FLY
 local flyOn=false; local flyBV,flyBG; local flyDir=Vector3.zero
-local FlyHUD=Instance.new("Frame"); FlyHUD.Size=UDim2.new(0,170,0,128)
-FlyHUD.Position=UDim2.new(1,-186,1,-146); FlyHUD.BackgroundTransparency=1
-FlyHUD.Visible=false; FlyHUD.Parent=SG
-
-toggle("SPEED","Fly","freefly mode + on-screen dpad",function(on)
+toggle("SPEED","Fly Mode","fly freely over map",function(on)
     flyOn=on
     if on then
         flyBV=Instance.new("BodyVelocity"); flyBV.MaxForce=Vector3.new(1e5,1e5,1e5)
@@ -1154,84 +1242,235 @@ toggle("SPEED","Fly","freefly mode + on-screen dpad",function(on)
         if flyBG then flyBG:Destroy(); flyBG=nil end
         flyDir=Vector3.zero
     end
-    FlyHUD.Visible=on
 end)
 
+local FlyHUD=Instance.new("Frame")
+FlyHUD.Size=UDim2.new(0,162,0,122); FlyHUD.Position=UDim2.new(1,-176,1,-140)
+FlyHUD.BackgroundTransparency=1; FlyHUD.Visible=false; FlyHUD.Parent=SG
+
 RunService.RenderStepped:Connect(function()
-    if flyOn and flyBV then flyBV.Velocity=flyDir*60; flyBG.CFrame=Cam.CFrame end
+    if flyOn and flyBV then flyBV.Velocity=flyDir*55; flyBG.CFrame=Cam.CFrame end
+    FlyHUD.Visible=flyOn
 end)
 
 local function mFB(lbl,x,y,w,h,dir)
-    local b=Instance.new("TextButton"); b.Text=lbl
-    b.Size=UDim2.new(0,w,0,h); b.Position=UDim2.new(0,x,0,y)
-    b.BackgroundColor3=Color3.fromRGB(14,10,22); b.BackgroundTransparency=0.15
-    b.TextColor3=T.accent; b.TextSize=16; b.Font=Enum.Font.GothamBold
-    b.BorderSizePixel=0; b.Parent=FlyHUD
-    Instance.new("UICorner",b).CornerRadius=UDim.new(0,9)
-    local st=Instance.new("UIStroke"); st.Color=T.accent; st.Thickness=1
-    st.Transparency=0.6; st.Parent=b
+    local b=Instance.new("TextButton")
+    b.Text=lbl; b.Size=UDim2.new(0,w,0,h); b.Position=UDim2.new(0,x,0,y)
+    b.BackgroundColor3=Color3.fromRGB(12,12,14); b.BackgroundTransparency=0.2
+    b.TextColor3=T.accent; b.TextSize=16
+    b.Font=Enum.Font.GothamBold; b.BorderSizePixel=0; b.Parent=FlyHUD
+    Instance.new("UICorner",b).CornerRadius=UDim.new(0,10)
+    Instance.new("UIStroke",b).Color=T.accent
     b.InputBegan:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+        if i.UserInputType==Enum.UserInputType.Touch or
+           i.UserInputType==Enum.UserInputType.MouseButton1 then
             flyDir=flyDir+dir
-            TweenService:Create(b,TweenInfo.new(0.1),{BackgroundColor3=T.accent,TextColor3=Color3.fromRGB(10,10,14)}):Play()
         end
     end)
     b.InputEnded:Connect(function(i)
-        if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+        if i.UserInputType==Enum.UserInputType.Touch or
+           i.UserInputType==Enum.UserInputType.MouseButton1 then
             flyDir=flyDir-dir
-            TweenService:Create(b,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(14,10,22),TextColor3=T.accent}):Play()
         end
     end)
 end
-mFB("↑",58,0,50,50,Vector3.new(0,0,-1)); mFB("↓",58,54,50,50,Vector3.new(0,0,1))
-mFB("←",4,27,50,50,Vector3.new(-1,0,0)); mFB("→",112,27,50,50,Vector3.new(1,0,0))
-mFB("▲",4,94,76,30,Vector3.new(0,1,0)); mFB("▼",86,94,76,30,Vector3.new(0,-1,0))
-
-slider("SPEED","Fly Speed","speed when flying",10,200,60,function(v)
-    _G.dpm_flyspeed=v
-end)
+mFB("↑",55,0,48,48,Vector3.new(0,0,-1))
+mFB("↓",55,52,48,48,Vector3.new(0,0,1))
+mFB("←",2,26,48,48,Vector3.new(-1,0,0))
+mFB("→",108,26,48,48,Vector3.new(1,0,0))
+mFB("▲",2,90,74,28,Vector3.new(0,1,0))
+mFB("▼",84,90,74,28,Vector3.new(0,-1,0))
 
 -- =============================================
---  ░░░  VISUAL TAB  ░░░
+--  TROLL TAB
 -- =============================================
-toggle("VISUAL","Full Bright","removes fog + max ambient",function(on)
-    Lighting.Brightness=on and 10 or 1; Lighting.ClockTime=14
-    Lighting.FogEnd=on and 1e6 or 100000; Lighting.GlobalShadows=not on
-    Lighting.Ambient=on and Color3.new(1,1,1) or Color3.fromRGB(127,127,127)
+toggle("TROLL","Fling Others","launch nearby players",function(on)
+    RunService.Heartbeat:Connect(function()
+        if not on or not Root then return end
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp and (hrp.Position-Root.Position).Magnitude<15 then
+                    local bv=Instance.new("BodyVelocity")
+                    bv.MaxForce=Vector3.new(1e5,1e5,1e5)
+                    bv.Velocity=Vector3.new(math.random(-80,80),80,math.random(-80,80))
+                    bv.Parent=hrp; game:GetService("Debris"):AddItem(bv,0.2)
+                end
+            end
+        end
+    end)
 end)
-
-toggle("VISUAL","Night Mode","sets clock to midnight",function(on)
-    Lighting.ClockTime=on and 0 or 14
-    Lighting.Ambient=on and Color3.fromRGB(0,0,40) or Color3.fromRGB(127,127,127)
+toggle("TROLL","Freeze Others","anchor all players",function(on)
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP and p.Character then
+            for _,pt in pairs(p.Character:GetDescendants()) do
+                if pt:IsA("BasePart") then pt.Anchored=on end
+            end
+        end
+    end
 end)
-
-toggle("VISUAL","Rainbow Sky","cycles sky color",function(on)
+toggle("TROLL","Spin Others","spin every enemy",function(on)
+    RunService.Heartbeat:Connect(function()
+        if not on then return end
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then hrp.CFrame=hrp.CFrame*CFrame.Angles(0,math.rad(20),0) end
+            end
+        end
+    end)
+end)
+toggle("TROLL","Tiny Others","shrinks all enemies",function(on)
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP and p.Character then
+            local hum=p.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.BodyDepthScale.Value=on and 0.1 or 1
+                hum.BodyHeightScale.Value=on and 0.1 or 1
+                hum.BodyWidthScale.Value=on and 0.1 or 1
+                hum.HeadScale.Value=on and 0.1 or 1
+            end
+        end
+    end
+end)
+toggle("TROLL","Giant Others","makes enemies huge",function(on)
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP and p.Character then
+            local hum=p.Character:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.BodyDepthScale.Value=on and 8 or 1
+                hum.BodyHeightScale.Value=on and 8 or 1
+                hum.BodyWidthScale.Value=on and 8 or 1
+                hum.HeadScale.Value=on and 8 or 1
+            end
+        end
+    end
+end)
+toggle("TROLL","Chat Spam","L and ratio spam",function(on)
+    local msgs={"L","ratio","no diff","DPM wins","skill issue","stay mad","EZ","🥚"}
     task.spawn(function()
-        local h=0
         while on do
-            h=(h+0.002)%1
-            Lighting.Ambient=Color3.fromHSV(h,0.5,0.7)
-            task.wait(0.05)
+            pcall(function()
+                game:GetService("ReplicatedStorage")
+                    :WaitForChild("DefaultChatSystemChatEvents")
+                    :WaitForChild("SayMessageRequest")
+                    :FireServer(msgs[math.random(#msgs)],"All")
+            end)
+            task.wait(2)
+        end
+    end)
+end)
+toggle("TROLL","Fling All Once","yeet entire server",function(on)
+    if on then
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local bv=Instance.new("BodyVelocity")
+                    bv.MaxForce=Vector3.new(1e5,1e5,1e5)
+                    bv.Velocity=Vector3.new(math.random(-300,300),600,math.random(-300,300))
+                    bv.Parent=hrp; game:GetService("Debris"):AddItem(bv,0.4)
+                end
+            end
+        end
+    end
+end)
+toggle("TROLL","Teleport Bomb","tp to each player briefly",function(on)
+    task.spawn(function()
+        while on do
+            for _,p in pairs(Players:GetPlayers()) do
+                if p~=LP and p.Character and Root then
+                    local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                    if hrp then Root.CFrame=hrp.CFrame+Vector3.new(0,4,0) end
+                    task.wait(0.3)
+                end
+            end
         end
     end)
 end)
 
-toggle("VISUAL","ESP Players","labels above all players",function(on)
+-- =============================================
+--  COMBAT TAB
+-- =============================================
+local aimbotOn=false
+toggle("COMBAT","Aimbot","snap cam to nearest player",function(on) aimbotOn=on end)
+
+local FOV=140
+RunService.RenderStepped:Connect(function()
+    if not aimbotOn then return end
+    local best,bd=nil,FOV
+    local cx=Cam.ViewportSize.X/2; local cy=Cam.ViewportSize.Y/2
+    for _,p in pairs(Players:GetPlayers()) do
+        if p~=LP and p.Character then
+            local tgt=p.Character:FindFirstChild("Head") or p.Character:FindFirstChild("HumanoidRootPart")
+            if tgt then
+                local hum=p.Character:FindFirstChild("Humanoid")
+                if hum and hum.Health>0 then
+                    local pos,vis=Cam:WorldToViewportPoint(tgt.Position)
+                    if vis then
+                        local d=(Vector2.new(pos.X,pos.Y)-Vector2.new(cx,cy)).Magnitude
+                        if d<bd then bd=d; best=tgt end
+                    end
+                end
+            end
+        end
+    end
+    if best then Cam.CFrame=CFrame.new(Cam.CFrame.Position,best.Position) end
+end)
+
+toggle("COMBAT","Kill Aura 8st","auto-kill close range",function(on)
+    RunService.Heartbeat:Connect(function()
+        if not on or not Root then return end
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                local hum=p.Character:FindFirstChild("Humanoid")
+                if hrp and hum and (hrp.Position-Root.Position).Magnitude<8 then hum.Health=0 end
+            end
+        end
+    end)
+end)
+toggle("COMBAT","Kill Aura 20st","wide kill range",function(on)
+    RunService.Heartbeat:Connect(function()
+        if not on or not Root then return end
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                local hum=p.Character:FindFirstChild("Humanoid")
+                if hrp and hum and (hrp.Position-Root.Position).Magnitude<20 then hum.Health=0 end
+            end
+        end
+    end)
+end)
+toggle("COMBAT","God Mode","lock HP at max",function(on)
+    RunService.Heartbeat:Connect(function() if on and Hum then Hum.Health=Hum.MaxHealth end end)
+end)
+toggle("COMBAT","ESP Names+HP","player labels",function(on)
     local esps={}
     local function add(p)
         if p==LP then return end
         local function onChar(c)
-            task.wait(0.4)
-            local hrp=c:FindFirstChild("HumanoidRootPart"); if not hrp then return end
-            local bb=Instance.new("BillboardGui"); bb.Size=UDim2.new(0,110,0,28)
-            bb.StudsOffset=Vector3.new(0,4,0); bb.AlwaysOnTop=true; bb.Adornee=hrp; bb.Parent=hrp
-            local bg=Instance.new("Frame"); bg.Size=UDim2.new(1,0,1,0)
-            bg.BackgroundColor3=Color3.fromRGB(12,8,22); bg.BackgroundTransparency=0.4
-            bg.BorderSizePixel=0; bg.Parent=bb
-            Instance.new("UICorner",bg).CornerRadius=UDim.new(0,6)
-            local lbl=Instance.new("TextLabel"); lbl.Size=UDim2.new(1,0,1,0)
-            lbl.BackgroundTransparency=1; lbl.Text="👤 "..p.Name; lbl.TextColor3=T.accent
-            lbl.TextSize=11; lbl.Font=Enum.Font.GothamBold; lbl.Parent=bb
+            task.wait(0.5)
+            local hrp=c:FindFirstChild("HumanoidRootPart")
+            local hum=c:FindFirstChild("Humanoid")
+            if not hrp then return end
+            local bb=Instance.new("BillboardGui")
+            bb.Size=UDim2.new(0,110,0,40); bb.StudsOffset=Vector3.new(0,3.5,0)
+            bb.AlwaysOnTop=true; bb.Adornee=hrp; bb.Parent=hrp
+            local nl=Instance.new("TextLabel")
+            nl.Size=UDim2.new(1,0,0,20); nl.BackgroundTransparency=1
+            nl.Text=p.Name; nl.TextColor3=T.accent
+            nl.TextSize=11; nl.Font=Enum.Font.GothamBold; nl.Parent=bb
+            local hl=Instance.new("TextLabel")
+            hl.Size=UDim2.new(1,0,0,14); hl.Position=UDim2.new(0,0,0,22)
+            hl.BackgroundTransparency=1; hl.TextSize=9; hl.Font=Enum.Font.Gotham; hl.Parent=bb
+            RunService.Heartbeat:Connect(function()
+                if hum then
+                    hl.Text=string.format("HP %.0f/%.0f",hum.Health,hum.MaxHealth)
+                    local f=hum.Health/hum.MaxHealth
+                    hl.TextColor3=Color3.fromRGB(math.floor(255*(1-f)),math.floor(210*f),0)
+                end
+            end)
             esps[p]=bb
         end
         if p.Character then onChar(p.Character) end
@@ -1242,8 +1481,149 @@ toggle("VISUAL","ESP Players","labels above all players",function(on)
         Players.PlayerAdded:Connect(add)
     else for _,v in pairs(esps) do v:Destroy() end; esps={} end
 end)
+toggle("COMBAT","Chams X-Ray","see through walls",function(on)
+    local function apply(p)
+        if p==LP then return end
+        local function onChar(c)
+            for _,pt in pairs(c:GetDescendants()) do
+                if pt:IsA("BasePart") then
+                    local s=Instance.new("SelectionBox"); s.Adornee=pt
+                    s.Color3=T.accent; s.LineThickness=0.04
+                    s.SurfaceTransparency=0.85; s.SurfaceColor3=T.accent
+                    s.Parent=pt; s.Name="_dpmcham"
+                end
+            end
+        end
+        if p.Character then onChar(p.Character) end
+        p.CharacterAdded:Connect(onChar)
+    end
+    if on then
+        for _,p in pairs(Players:GetPlayers()) do apply(p) end
+    else
+        for _,p in pairs(Players:GetPlayers()) do
+            if p.Character then
+                for _,d in pairs(p.Character:GetDescendants()) do
+                    if d.Name=="_dpmcham" then d:Destroy() end
+                end
+            end
+        end
+    end
+end)
 
-toggle("VISUAL","Invisible","makes your char transparent",function(on)
+-- =============================================
+--  VISUAL TAB
+-- =============================================
+toggle("VISUAL","Full Bright","no fog no shadows",function(on)
+    Lighting.Brightness=on and 10 or 1; Lighting.ClockTime=14
+    Lighting.FogEnd=on and 1e6 or 100000; Lighting.GlobalShadows=not on
+    Lighting.Ambient=on and Color3.new(1,1,1) or Color3.fromRGB(127,127,127)
+end)
+toggle("VISUAL","Crosshair","gold dot at center",function(on)
+    local ex=SG:FindFirstChild("_dpmCH"); if ex then ex:Destroy() end
+    if on then
+        local wrap=Instance.new("Frame"); wrap.Name="_dpmCH"
+        wrap.Size=UDim2.new(0,20,0,20); wrap.Position=UDim2.new(0.5,-10,0.5,-10)
+        wrap.BackgroundTransparency=1; wrap.BorderSizePixel=0; wrap.Parent=SG
+        local ch=Instance.new("Frame"); ch.Size=UDim2.new(0,8,0,8)
+        ch.Position=UDim2.new(0.5,-4,0.5,-4)
+        ch.BackgroundColor3=T.accent; ch.BackgroundTransparency=0.25
+        ch.BorderSizePixel=0; ch.Parent=wrap
+        Instance.new("UICorner",ch).CornerRadius=UDim.new(1,0)
+        local ring=Instance.new("Frame"); ring.Size=UDim2.new(1,0,1,0)
+        ring.BackgroundTransparency=1; ring.BorderSizePixel=0; ring.Parent=wrap
+        Instance.new("UICorner",ring).CornerRadius=UDim.new(1,0)
+        local rs=Instance.new("UIStroke"); rs.Color=T.accent
+        rs.Thickness=1; rs.Transparency=0.5; rs.Parent=ring
+    end
+end)
+toggle("VISUAL","Remove Particles","disable all FX",function(on)
+    for _,v in pairs(workspace:GetDescendants()) do
+        if v:IsA("ParticleEmitter") or v:IsA("Trail") or v:IsA("Beam") then
+            v.Enabled=not on
+        end
+    end
+end)
+toggle("VISUAL","Rainbow Eggs","eggs flash colors",function(on)
+    task.spawn(function()
+        local h=0
+        while on do
+            h=(h+0.02)%1
+            for _,v in pairs(workspace:GetDescendants()) do
+                if v.Name:lower():find("egg") and v:IsA("BasePart") then
+                    v.Color=Color3.fromHSV(h,0.9,1)
+                end
+            end
+            task.wait(0.05)
+        end
+    end)
+end)
+toggle("VISUAL","Neon Eggs","neon material on eggs",function(on)
+    for _,v in pairs(workspace:GetDescendants()) do
+        if v.Name:lower():find("egg") and v:IsA("BasePart") then
+            v.Material=on and Enum.Material.Neon or Enum.Material.SmoothPlastic
+        end
+    end
+end)
+toggle("VISUAL","Bloom Glow","bloom effect on scene",function(on)
+    local bloom=Lighting:FindFirstChild("_dpmBloom") or Instance.new("BloomEffect")
+    bloom.Name="_dpmBloom"; bloom.Parent=Lighting
+    bloom.Intensity=on and 2 or 0; bloom.Size=on and 20 or 0; bloom.Threshold=on and 0.9 or 1
+end)
+toggle("VISUAL","B&W Mode","desaturate world",function(on)
+    local cc=Lighting:FindFirstChild("_dpmBW") or Instance.new("ColorCorrectionEffect")
+    cc.Name="_dpmBW"; cc.Parent=Lighting; cc.Saturation=on and -1 or 0
+end)
+toggle("VISUAL","Gold Tint","warm gold world filter",function(on)
+    local cc=Lighting:FindFirstChild("_dpmGold") or Instance.new("ColorCorrectionEffect")
+    cc.Name="_dpmGold"; cc.Parent=Lighting
+    cc.TintColor=on and T.accent or Color3.new(1,1,1); cc.Brightness=on and 0.05 or 0
+end)
+
+-- =============================================
+--  WORLD TAB
+-- =============================================
+toggle("WORLD","No Fog","clear all fog",function(on)
+    Lighting.FogStart=on and 1e8 or 0; Lighting.FogEnd=on and 1e9 or 100000
+end)
+toggle("WORLD","Rainbow Sky","cycles sky color",function(on)
+    task.spawn(function()
+        local h=0
+        while on do h=(h+0.003)%1; Lighting.Ambient=Color3.fromHSV(h,0.5,0.8); task.wait(0.05) end
+        Lighting.Ambient=Color3.fromRGB(127,127,127)
+    end)
+end)
+toggle("WORLD","Night Mode","set time to midnight",function(on)
+    Lighting.ClockTime=on and 0 or 14
+end)
+toggle("WORLD","Noon Mode","set time to noon",function(on)
+    Lighting.ClockTime=on and 12 or 14
+end)
+toggle("WORLD","Blur World","intense blur",function(on)
+    TweenService:Create(blur,TweenInfo.new(0.5),{Size=on and 24 or 8}):Play()
+end)
+toggle("WORLD","Invisible Map","transparent all parts",function(on)
+    for _,p in pairs(workspace:GetDescendants()) do
+        if p:IsA("BasePart") and not p:IsDescendantOf(LP.Character or Instance.new("Model")) then
+            p.Transparency=on and 0.95 or 0
+        end
+    end
+end)
+toggle("WORLD","Black Sky","pitch black ambient",function(on)
+    Lighting.Ambient=on and Color3.fromRGB(0,0,0) or Color3.fromRGB(127,127,127)
+    Lighting.OutdoorAmbient=on and Color3.fromRGB(0,0,0) or Color3.fromRGB(127,127,127)
+end)
+toggle("WORLD","Ice World","everything slippery",function(on)
+    for _,p in pairs(workspace:GetDescendants()) do
+        if p:IsA("BasePart") then
+            p.Material=on and Enum.Material.Ice or Enum.Material.SmoothPlastic
+        end
+    end
+end)
+
+-- =============================================
+--  PLAYER TAB
+-- =============================================
+toggle("PLAYER","Invisible","transparent character",function(on)
     if not Char then return end
     for _,p in pairs(Char:GetDescendants()) do
         if p:IsA("BasePart") and p.Name~="HumanoidRootPart" then
@@ -1251,209 +1631,188 @@ toggle("VISUAL","Invisible","makes your char transparent",function(on)
         end
     end
 end)
-
-toggle("VISUAL","Rainbow Char","cycles your character color",function(on)
+toggle("PLAYER","Rainbow Self","cycles body color",function(on)
     task.spawn(function()
         local h=0
-        while on do h=(h+0.01)%1
-            if Char then for _,p in pairs(Char:GetDescendants()) do
-                if p:IsA("BasePart") then p.Color=Color3.fromHSV(h,0.85,1) end
-            end end
+        while on do
+            h=(h+0.01)%1
+            if Char then
+                for _,p in pairs(Char:GetDescendants()) do
+                    if p:IsA("BasePart") then p.Color=Color3.fromHSV(h,0.8,1) end
+                end
+            end
             task.wait(0.05)
         end
     end)
 end)
-
-toggle("VISUAL","Wireframe Char","see-through wireframe body",function(on)
+toggle("PLAYER","Giant Self","scale to 500%",function(on)
+    if Char then
+        local hum=Char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.BodyDepthScale.Value=on and 5 or 1
+            hum.BodyHeightScale.Value=on and 5 or 1
+            hum.BodyWidthScale.Value=on and 5 or 1
+            hum.HeadScale.Value=on and 5 or 1
+        end
+    end
+end)
+toggle("PLAYER","Tiny Self","shrink to 10%",function(on)
+    if Char then
+        local hum=Char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.BodyDepthScale.Value=on and 0.1 or 1
+            hum.BodyHeightScale.Value=on and 0.1 or 1
+            hum.BodyWidthScale.Value=on and 0.1 or 1
+            hum.HeadScale.Value=on and 0.1 or 1
+        end
+    end
+end)
+toggle("PLAYER","Freeze Self","anchor your root",function(on)
+    if Root then Root.Anchored=on end
+end)
+toggle("PLAYER","Ghost Mode","no clip + semi invisible",function(on)
     if not Char then return end
     for _,p in pairs(Char:GetDescendants()) do
         if p:IsA("BasePart") and p.Name~="HumanoidRootPart" then
-            p.Material=on and Enum.Material.Neon or Enum.Material.SmoothPlastic
-            p.Transparency=on and 0.88 or 0
+            p.LocalTransparencyModifier=on and 0.7 or 0
+            p.CanCollide=not on
         end
     end
 end)
-
-toggle("VISUAL","Remove Fog","removes all world fog",function(on)
-    Lighting.FogEnd=on and 1e9 or 100000
-    Lighting.FogStart=on and 1e9 or 0
-end)
-
--- =============================================
---  ░░░  COMBAT TAB  ░░░  (new)
--- =============================================
-toggle("COMBAT","God Mode","locks HP at max every frame",function(on)
+toggle("PLAYER","Spin Char","rotate character",function(on)
     RunService.Heartbeat:Connect(function()
-        if on and Hum then Hum.Health=Hum.MaxHealth end
+        if on and Root then Root.CFrame=Root.CFrame*CFrame.Angles(0,math.rad(12),0) end
     end)
 end)
-
-toggle("COMBAT","Anti Knockback","removes velocity each frame",function(on)
-    RunService.Heartbeat:Connect(function()
-        if on and Root then
-            Root.AssemblyLinearVelocity=Vector3.new(
-                Root.AssemblyLinearVelocity.X,
-                Root.AssemblyLinearVelocity.Y,
-                Root.AssemblyLinearVelocity.Z
-            )
-            -- zero horizontal knockback
-            Root.AssemblyLinearVelocity=Vector3.new(0,Root.AssemblyLinearVelocity.Y,0)
-        end
-    end)
-end)
-
-slider("COMBAT","Damage Mult","multiply damage you deal (remote)",1,50,1,function(v)
-    _G.dpm_dmgMult=v
-    pcall(function()
-        LP:SetAttribute("DamageMultiplier",v)
-        LP:SetAttribute("Damage",v*10)
-        LP:SetAttribute("AttackPower",v*10)
-    end)
-end)
-
-toggle("COMBAT","Auto Attack Near","attacks players near you",function(on)
-    RunService.Heartbeat:Connect(function()
-        if not on or not Root then return end
-        for _,p in pairs(Players:GetPlayers()) do
-            if p~=LP and p.Character then
-                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
-                local hum=p.Character:FindFirstChild("Humanoid")
-                if hrp and hum and (hrp.Position-Root.Position).Magnitude<12 then
-                    pcall(function() hum:TakeDamage(10) end)
-                    fireRemote("attack",p.Character); fireRemote("hit",p.Character)
-                    fireRemote("damage",p.Character,10)
-                end
-            end
-        end
-    end)
-end)
-
-toggle("COMBAT","Freeze Near Players","anchors players near you",function(on)
-    RunService.Heartbeat:Connect(function()
-        if not on or not Root then return end
-        for _,p in pairs(Players:GetPlayers()) do
-            if p~=LP and p.Character then
-                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
-                if hrp and (hrp.Position-Root.Position).Magnitude<20 then
-                    hrp.Anchored=true
-                end
-            end
-        end
-    end)
-end)
-
-actionBtn("COMBAT","Kill Nearest","sends kill remote to closest player",function()
-    local closest,dist=nil,math.huge
-    for _,p in pairs(Players:GetPlayers()) do
-        if p~=LP and p.Character then
-            local hrp=p.Character:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                local d=(hrp.Position-Root.Position).Magnitude
-                if d<dist then dist=d; closest=p end
-            end
-        end
-    end
-    if closest then
-        pcall(function()
-            local hum=closest.Character:FindFirstChild("Humanoid")
-            if hum then hum.Health=0 end
-        end)
-        fireRemote("kill",closest.Character)
-        fireRemote("damage",closest.Character,99999)
-        notify("Kill sent","→ "..closest.Name)
-    else notify("No nearby player","get closer") end
-end)
-
--- =============================================
---  ░░░  MISC TAB  ░░░
--- =============================================
-toggle("MISC","Anti AFK","prevents idle kick",function(on)
-    if on then LP.Idled:Connect(function() LP:Move(Vector3.new(0,0,-1),true) end) end
-end)
-
-toggle("MISC","Chat Spam","spams a message in chat",function(on)
-    _G.dpm_chatspam=on
-    if on then
-        task.spawn(function()
-            while _G.dpm_chatspam do
-                pcall(function()
-                    game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
-                        :FindFirstChild("SayMessageRequest"):FireServer("DPM — Steal An Egg","All")
-                end)
-                task.wait(3)
-            end
-        end)
-    end
-end)
-
-toggle("MISC","Fake Lag","simulates lag spikes",function(on)
+toggle("PLAYER","Auto Heal","regen hp fast",function(on)
     task.spawn(function()
         while on do
-            task.wait(math.random(2,5))
-            if on then
-                local t=tick()
-                while tick()-t<0.8 do end
-            end
+            if Hum then Hum.Health=math.min(Hum.Health+5,Hum.MaxHealth) end
+            task.wait(0.1)
         end
     end)
 end)
-
-actionBtn("MISC","Rejoin","rejoins the current server",function()
-    notify("Rejoining...","see you in a sec")
-    task.delay(1,function()
-        local tid=game.PlaceId
-        local sid=game.JobId
-        pcall(function() game:GetService("TeleportService"):TeleportToPlaceInstance(tid,sid,LP) end)
-    end)
-end)
-
-actionBtn("MISC","Print All Remotes","logs every remote to console",function()
-    local c=0
-    for _,v in pairs(game:GetDescendants()) do
-        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
-            print("[DPM] "..v:GetFullName()); c=c+1
+toggle("PLAYER","Speed Trail","motion trail behind you",function(on)
+    if Char then
+        for _,p in pairs(Char:GetDescendants()) do
+            if p:IsA("BasePart") then
+                local ex=p:FindFirstChild("_dpmTrail")
+                if on and not ex then
+                    local a0=Instance.new("Attachment"); a0.Position=Vector3.new(0,0.5,0); a0.Parent=p
+                    local a1=Instance.new("Attachment"); a1.Position=Vector3.new(0,-0.5,0); a1.Parent=p
+                    local tr=Instance.new("Trail"); tr.Name="_dpmTrail"
+                    tr.Attachment0=a0; tr.Attachment1=a1; tr.Lifetime=0.4
+                    tr.Color=ColorSequence.new({
+                        ColorSequenceKeypoint.new(0,T.accent),
+                        ColorSequenceKeypoint.new(1,Color3.new(1,1,1)),
+                    })
+                    tr.Parent=p
+                elseif not on and ex then ex:Destroy() end
+            end
         end
     end
-    notify("Remotes: "..c,"check output console")
 end)
 
-toggle("MISC","No Clip","phase through walls",function(on)
-    _G.dpm_noclip2=on
-    RunService.Stepped:Connect(function()
-        if _G.dpm_noclip2 and Char then
-            for _,p in pairs(Char:GetDescendants()) do
-                if p:IsA("BasePart") then p.CanCollide=false end
+-- =============================================
+--  MISC TAB
+-- =============================================
+toggle("MISC","Anti AFK","prevent idle kick",function(on)
+    if on then LP.Idled:Connect(function() LP:Move(Vector3.new(0,0,-1),true) end) end
+end)
+toggle("MISC","Print All Remotes","log every remote",function(on)
+    if on then
+        for _,v in pairs(game:GetDescendants()) do
+            if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+                print("[DPM REMOTE] "..v:GetFullName())
+            end
+        end
+    end
+end)
+toggle("MISC","Print Values","log all game values",function(on)
+    if on then
+        for _,v in pairs(game:GetDescendants()) do
+            if v:IsA("IntValue") or v:IsA("NumberValue") or v:IsA("StringValue") then
+                print("[DPM VAL] "..v:GetFullName().." = "..tostring(v.Value))
+            end
+        end
+    end
+end)
+toggle("MISC","Max All IntValues","set all ints to 999999",function(on)
+    if on then
+        for _,v in pairs(game:GetDescendants()) do
+            if v:IsA("IntValue") or v:IsA("NumberValue") then
+                pcall(function() v.Value=999999 end)
+            end
+        end
+    end
+end)
+toggle("MISC","Auto Rejoin","rejoin on death",function(on)
+    _G.dpm_rej=on
+    LP.CharacterRemoving:Connect(function()
+        if _G.dpm_rej then task.wait(2)
+            game:GetService("TeleportService"):Teleport(PLACE_ID,LP) end
+    end)
+end)
+toggle("MISC","Tracers to Players","lines to all players",function(on)
+    RunService.RenderStepped:Connect(function()
+        local ex=SG:FindFirstChild("_dpmTracers"); if ex then ex:Destroy() end
+        if not on then return end
+        local wrap=Instance.new("Frame"); wrap.Name="_dpmTracers"
+        wrap.Size=UDim2.new(1,0,1,0); wrap.BackgroundTransparency=1
+        wrap.BorderSizePixel=0; wrap.Parent=SG
+        for _,p in pairs(Players:GetPlayers()) do
+            if p~=LP and p.Character then
+                local hrp=p.Character:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    local pos,vis=Cam:WorldToViewportPoint(hrp.Position)
+                    if vis then
+                        local cx=Cam.ViewportSize.X/2; local cy=Cam.ViewportSize.Y
+                        local dx=pos.X-cx; local dy=pos.Y-cy
+                        local len=math.sqrt(dx*dx+dy*dy)
+                        local ang=math.atan2(dy,dx)
+                        local line=Instance.new("Frame")
+                        line.Size=UDim2.new(0,len,0,1)
+                        line.Position=UDim2.new(0,cx,0,cy)
+                        line.AnchorPoint=Vector2.new(0,0.5)
+                        line.Rotation=math.deg(ang)
+                        line.BackgroundColor3=T.accent
+                        line.BackgroundTransparency=0.4
+                        line.BorderSizePixel=0; line.Parent=wrap
+                    end
+                end
             end
         end
     end)
 end)
-
-toggle("MISC","Big Head","scales head up",function(on)
-    if not Char then return end
-    local head=Char:FindFirstChild("Head")
-    if head then head.Size=on and Vector3.new(4,4,4) or Vector3.new(2,1,1) end
+toggle("MISC","Delete NPCs","remove all NPC models",function(on)
+    if on then
+        for _,v in pairs(workspace:GetDescendants()) do
+            if v:IsA("Model") and v~=LP.Character and v:FindFirstChildOfClass("Humanoid") then
+                pcall(function() v:Destroy() end)
+            end
+        end
+    end
 end)
-
-toggle("MISC","Tiny Mode","shrinks your character",function(on)
-    if not Hum then return end
-    Hum.BodyDepthScale.Value=on and 0.3 or 1
-    Hum.BodyHeightScale.Value=on and 0.3 or 1
-    Hum.BodyWidthScale.Value=on and 0.3 or 1
-    Hum.HeadScale.Value=on and 0.3 or 1
+toggle("MISC","TP Center","go to 0,50,0",function(on)
+    if on and Root then Root.CFrame=CFrame.new(0,50,0) end
 end)
-
-toggle("MISC","Giant Mode","makes you massive",function(on)
-    if not Hum then return end
-    Hum.BodyDepthScale.Value=on and 3.5 or 1
-    Hum.BodyHeightScale.Value=on and 3.5 or 1
-    Hum.BodyWidthScale.Value=on and 3.5 or 1
-    Hum.HeadScale.Value=on and 3.5 or 1
+toggle("MISC","Fling Self","yeet yourself far",function(on)
+    if on and Root then
+        local bv=Instance.new("BodyVelocity"); bv.MaxForce=Vector3.new(1e5,1e5,1e5)
+        bv.Velocity=Vector3.new(math.random(-200,200),400,math.random(-200,200))
+        bv.Parent=Root; game:GetService("Debris"):AddItem(bv,0.5)
+    end
 end)
 
 -- =============================================
---  LAUNCH
+--  BOOT NOTIFICATION
 -- =============================================
-task.delay(0.7,function()
-    notify("DPM — Steal An Egg v2","loaded  ·  gethui patched")
+task.delay(0.6,function()
+    notify("DPM — STEAL AN EGG","made by DPM  ·  Loaded!")
 end)
-print("DPM Steal An Egg v2 — ready | gui parent: "..tostring(guiParent))
+task.delay(1.8,function()
+    notify("🥚 Auto Farm Ready","Toggle FARM tab to begin")
+end)
+
+print("DPM Steal An Egg loaded | PlaceID: "..PLACE_ID)
+print("Tabs: FARM | EGGS | FUSE | SPEED | TROLL | COMBAT | VISUAL | WORLD | PLAYER | MISC")
