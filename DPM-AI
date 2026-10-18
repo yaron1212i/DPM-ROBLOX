@@ -1,0 +1,941 @@
+-- ╔══════════════════════════════════════╗
+-- ║             DPM — AI                ║
+-- ║         powered by DPM Owner        ║
+-- ╚══════════════════════════════════════╝
+
+local Players          = game:GetService("Players")
+local TweenService     = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService       = game:GetService("RunService")
+local Lighting         = game:GetService("Lighting")
+local HTTP             = game:GetService("HttpService")
+
+local LP = Players.LocalPlayer
+
+-- =============================================
+--  KNOWLEDGE BASE — DPM AI BRAIN
+-- =============================================
+local SYSTEM_PROMPT = [[
+You are DPM-AI, a custom AI assistant built by DPM Owner for the DPM script collection.
+You know everything about DPM's scripts and Roblox.
+
+CORE FACTS YOU ALWAYS KNOW:
+- All DPM scripts were made by: DPM Owner
+- The DPM script collection includes:
+  * DPM PREMIUM — advanced mod menu for most Roblox games (speed, aimbot, ESP, visual, world, player, game-specific, fun mods). Glass black/white UI. 8 tabs.
+  * DPM CLASSIC — mod menu for classic Roblox games: Natural Disaster, Hide & Seek Extreme, Murder Mystery 2, Work at a Pizza Place, Jailbreak, Tower of Hell, Adopt Me, Brookhaven, Arsenal, Blox Fruits, Pet Simulator X
+  * DPM RIVALS MENU — dedicated mod menu for the Roblox game Rivals. Includes aimbot, ESP, kill aura, god mode, fly, speed hack, visual mods
+  * DPM STEAL AN EGG — dedicated script for Steal An Egg Roblox game. Features: auto farm, egg ESP, egg teleport, fuse luck hacks, auto grab, speed slider, fly
+  * DPM-AI — this AI assistant you are running right now
+- DPM scripts use a black and white glass aesthetic with smooth animations
+- All menus support Android executors (Arceus X, Delta, Hydrogen)
+- Scripts use UIGradient, UIStroke, BlurEffect for the glass look
+- Tab bars are scrollable horizontal rows
+- Cards use two-column left/right layout with pill toggles
+- DPM Owner is the sole creator and developer of all scripts
+- Scripts work by being injected through a Roblox executor
+
+PERSONALITY:
+- Short, confident, direct answers
+- Friendly but professional
+- If asked who made you: "DPM Owner built me"
+- If asked who made the scripts: "DPM Owner made all of them"
+- You can help with Roblox scripting questions too
+- Keep responses under 3 sentences unless a detailed list is needed
+- Never say you are Claude or any other AI. You are DPM-AI only.
+]]
+
+-- =============================================
+--  LOCAL AI ENGINE
+--  Pattern matching brain for instant responses
+-- =============================================
+local responses = {
+    -- CREATOR / OWNERSHIP
+    {
+        patterns = {"who made","who created","who built","who coded","who wrote","who is the creator","who is the author","who developed","who is dpm","what is dpm owner"},
+        answers = {
+            "DPM Owner made all of the DPM scripts — every single one.",
+            "That's DPM Owner. He's the sole creator and developer of every DPM script.",
+            "All DPM scripts were built by DPM Owner.",
+        }
+    },
+    -- THIS AI
+    {
+        patterns = {"who made you","who built you","who created you","who are you","what are you","tell me about yourself","introduce yourself","your creator","made dpm ai"},
+        answers = {
+            "I'm DPM-AI, built by DPM Owner. I know everything about DPM scripts and Roblox.",
+            "DPM Owner created me. I'm the AI assistant for the DPM script collection.",
+            "I'm DPM-AI — DPM Owner's personal AI assistant. Ask me anything about DPM scripts or Roblox.",
+        }
+    },
+    -- SCRIPTS LIST
+    {
+        patterns = {"what scripts","list scripts","all scripts","what mods","what menus","what do you have","dpm scripts","collection","what has dpm made"},
+        answers = {
+            "DPM Owner has made: DPM Premium (all games), DPM Classic (classic games), DPM Rivals Menu (Rivals), DPM Steal An Egg, and DPM-AI (me).",
+            "The DPM collection: DPM Premium, DPM Classic, DPM Rivals Menu, DPM Steal An Egg, and DPM-AI. All made by DPM Owner.",
+        }
+    },
+    -- DPM PREMIUM
+    {
+        patterns = {"dpm premium","premium script","premium menu","what is premium"},
+        answers = {
+            "DPM Premium is the flagship mod menu — works in most Roblox games. 8 tabs: General, Move, Combat, Visual, World, Player, Game, Fun. Glass B&W UI with aimbot, ESP, kill aura, fly, speed, and more.",
+            "DPM Premium is the main script — advanced glass menu for any Roblox game. Includes aimbot, kill aura, ESP, god mode, fly, speed sliders, and game-specific mods.",
+        }
+    },
+    -- DPM CLASSIC
+    {
+        patterns = {"dpm classic","classic script","classic menu","what is classic","natural disaster","hide and seek","murder mystery","jailbreak","tower of hell","brookhaven","adopt me"},
+        answers = {
+            "DPM Classic is the mod menu for classic Roblox games — Natural Disaster, Hide & Seek, MM2, Pizza Place, Jailbreak, Tower of Hell, Adopt Me, Brookhaven, Arsenal, Blox Fruits, and PSX. Game-specific mods for each.",
+            "DPM Classic auto-detects which classic game you're in and loads mods made specifically for it. Supports 12+ classic games.",
+        }
+    },
+    -- RIVALS
+    {
+        patterns = {"rivals","dpm rivals","rivals menu","rivals script","what is rivals"},
+        answers = {
+            "DPM Rivals Menu is the dedicated script for the Roblox game Rivals. Features aimbot, ESP, kill aura, god mode, anti knockback, fly, speed, and visual mods.",
+            "Rivals Menu — built specifically for Rivals. Has silent aim, FOV ring, kill aura up to 20 studs, full bright, ESP, and a mobile d-pad for flying.",
+        }
+    },
+    -- STEAL AN EGG
+    {
+        patterns = {"steal an egg","egg script","egg menu","steal egg","dpm egg","what is steal"},
+        answers = {
+            "DPM Steal An Egg is the script for Steal An Egg on Roblox. Features: auto farm loop, egg ESP, teleport to any egg, auto grab, fuse luck hacker, speed sliders, fly, and auto hatch/sell.",
+            "The Steal An Egg script has 6 tabs: Eggs (scan + TP), Tele, Farm (auto farm loop), Fuse (luck hacks), Speed, Misc. DPM Owner made it.",
+        }
+    },
+    -- HOW TO USE / INSTALL
+    {
+        patterns = {"how to use","how do i use","how to install","how to run","how to execute","how to inject","what executor","which executor","arceus","delta","krnl","synapse","fluxus"},
+        answers = {
+            "Download an executor (Arceus X or Delta for Android, Synapse X or KRNL for PC). Join a Roblox game, inject the executor, paste the script, and execute.",
+            "1. Get an executor — Arceus X or Delta on Android. 2. Open Roblox and join a game. 3. Open the executor, paste the DPM script, inject and run.",
+        }
+    },
+    -- AIMBOT
+    {
+        patterns = {"aimbot","aim bot","silent aim","fov","aim","target","lock on"},
+        answers = {
+            "The DPM aimbot snaps the camera to the nearest enemy's head. Toggle Body Fallback to target the torso instead. The FOV Ring shows the aim range as a white circle.",
+            "Aimbot in DPM Premium and Rivals Menu works by locking Cam.CFrame to the nearest visible enemy head within the FOV range.",
+        }
+    },
+    -- ESP
+    {
+        patterns = {"esp","see through","wall hack","x ray","see players","chams","player esp"},
+        answers = {
+            "DPM has two ESP types: Name+HP (floating labels above players with health bars) and Chams X-Ray (white outlines through walls using SelectionBox).",
+            "Toggle ESP Names+HP for floating labels, or Chams X-Ray for white wall outlines. Both are in the Visual or General tab.",
+        }
+    },
+    -- FLY
+    {
+        patterns = {"fly","flying","freefly","fly hack","how to fly","d-pad","fly pad"},
+        answers = {
+            "Toggle Fly in the Move tab. A D-pad appears bottom-right of your screen — arrows for direction, ▲▼ for altitude. Built for Android touch controls.",
+            "The fly system uses BodyVelocity + BodyGyro. The on-screen D-pad (↑↓←→ + UP/DOWN) lets you fly anywhere. Buttons light up when pressed.",
+        }
+    },
+    -- SPEED
+    {
+        patterns = {"speed","walk speed","run fast","speed hack","how fast","walkspeed"},
+        answers = {
+            "DPM has speed toggles (x3, x6, x10) and a slider from 8 to 200 walkspeed. Just drag the slider or tap a preset toggle.",
+            "Speed hacks set Humanoid.WalkSpeed directly. Use the slider for fine control, or toggle Speed x3/x6/x10 for quick presets.",
+        }
+    },
+    -- GOD MODE
+    {
+        patterns = {"god mode","godmode","immortal","no die","cant die","health","hp hack","infinite health"},
+        answers = {
+            "God Mode locks your HP at max every frame using RunService.Heartbeat. It's in the Combat tab of DPM Premium.",
+            "Toggle God Mode in Combat. It fires Hum.Health = Hum.MaxHealth every heartbeat so you never die.",
+        }
+    },
+    -- AUTO FARM
+    {
+        patterns = {"auto farm","autofarm","farm","farming","auto collect","grind"},
+        answers = {
+            "Auto Farm Loop in DPM Steal An Egg scans all eggs on the map, teleports to each one, fires collect/grab/steal remotes, then loops again. Runs continuously until toggled off.",
+            "The farm system: scan eggs → TP to each → fire all relevant remotes → repeat. It also tries TouchTransmitter triggers for games that use proximity collection.",
+        }
+    },
+    -- FUSE / LUCK
+    {
+        patterns = {"fuse","luck","fusion","merge","combine","pet luck","fuse luck","chance"},
+        answers = {
+            "The Fuse tab has a luck slider (1-100%), Max Luck Always (forces 100 every frame), Hook Fuse Remote (injects luck=100 into every fuse FireServer call), and Auto Fuse x20.",
+            "Fuse hacks work by: setting LP attributes (Luck, FuseLuck), editing leaderstats values, and hooking __namecall to inject high luck into any fuse remote call.",
+        }
+    },
+    -- KILL AURA
+    {
+        patterns = {"kill aura","killaura","aura","auto kill","kill nearby","damage"},
+        answers = {
+            "Kill Aura sets nearby enemies' Humanoid.Health to 0. Available in 8-stud (close range) and 20-stud (wide range) variants. In Combat tab.",
+            "Kill Aura loops every heartbeat, finds players within range, and zeroes their health. Toggle 8st for close combat or 20st for wide sweeps.",
+        }
+    },
+    -- FULL BRIGHT
+    {
+        patterns = {"full bright","fullbright","brightness","no shadow","see better","lighting","fog"},
+        answers = {
+            "Full Bright sets Lighting.Brightness=10, removes GlobalShadows, clears fog, and sets Ambient to white. Makes the map fully lit day or night.",
+            "Toggle Full Bright in General or World tab. It maxes out all lighting values so you can see perfectly in any map.",
+        }
+    },
+    -- TELEPORT
+    {
+        patterns = {"teleport","tp","warp","move to","go to","instant travel"},
+        answers = {
+            "DPM has several TP options: Double-Tap TP (double-tap anywhere on ground), Click TP (single tap), TP to spawn, TP to specific eggs, and loop-teleport through all eggs.",
+            "Teleport works by setting Root.CFrame directly. Double-Tap TP uses TouchTap + Raycast to find the ground position under your finger.",
+        }
+    },
+    -- NO CLIP
+    {
+        patterns = {"no clip","noclip","phase","walk through","through walls","ghost"},
+        answers = {
+            "No Clip sets CanCollide=false on all your character parts every Stepped frame so you phase through everything.",
+            "Toggle No Clip in Move tab. It loops every physics step and removes collision on all character BaseParts.",
+        }
+    },
+    -- ANDROID / MOBILE
+    {
+        patterns = {"android","mobile","phone","ios","tablet","touch","arceus x","delta executor"},
+        answers = {
+            "All DPM scripts are built for Android. They use touch-friendly large buttons, scrollable menus, draggable GUIs, and on-screen D-pads for fly controls.",
+            "For Android: use Arceus X or Delta executor. DPM menus are touch-optimized with big tap areas, pill toggles, and mobile-safe D-pads.",
+        }
+    },
+    -- UI / DESIGN
+    {
+        patterns = {"ui","design","look","aesthetic","style","black and white","glass","how does it look","theme"},
+        answers = {
+            "DPM uses a glass black-and-white aesthetic — dark transparent frames, white UIStrokes, UIGradients for depth, BlurEffect on the background, and animated pulsing borders.",
+            "The UI has: glass cards with gradient backgrounds, animated top shimmer lines, pill toggles with spring animations, ripple effects on tap, and a sliding tab indicator.",
+        }
+    },
+    -- REMOTES
+    {
+        patterns = {"remote","remotevent","remotefunction","fire server","fireserver","remote spy","how remotes"},
+        answers = {
+            "Use Print Remotes in the Misc tab to log all RemoteEvents and RemoteFunctions to the console. This helps identify which remotes the game uses for actions like hatching or buying.",
+            "DPM auto-scans remotes on load and caches them by keyword (egg, fuse, hatch, grab, etc.). Print Remotes lists everything for manual inspection.",
+        }
+    },
+    -- ERRORS / NOT WORKING
+    {
+        patterns = {"not working","doesnt work","broken","error","crash","failed","wont run","cant inject"},
+        answers = {
+            "Common fixes: 1) Make sure your executor is injected before running. 2) Join a less populated server. 3) Try a different executor. 4) Check if the game updated and patched something.",
+            "If a mod isn't working, run Print Remotes first to see what the game uses. Some games patch remote names — the script might need a manual remote path update.",
+        }
+    },
+    -- LOADSTRING
+    {
+        patterns = {"loadstring","github","how to share","raw link","url","upload"},
+        answers = {
+            "Upload your script to GitHub as a public .lua file, click Raw, copy the URL. Then use: loadstring(game:HttpGet('YOUR_RAW_URL'))()",
+            "1. Create a public GitHub repo. 2. Upload your .lua file. 3. Click Raw button. 4. Copy URL. 5. Use loadstring(game:HttpGet('URL'))() to run it anywhere.",
+        }
+    },
+    -- HOW SCRIPTS ARE MADE
+    {
+        patterns = {"how made","how was it made","how are scripts made","how do you make","how to make a script","scripting","lua","coding","programming"},
+        answers = {
+            "DPM scripts are written in Lua for Roblox executors. They use Roblox's GUI system (Frames, ScrollingFrames, TweenService) for the UI and hook into game internals via __namecall and RemoteEvents.",
+            "DPM Owner writes them in Lua — using RunService for loops, TweenService for animations, and RemoteEvent hooks for game-specific cheats. The glass UI uses UIGradient + UIStroke + BackgroundTransparency.",
+        }
+    },
+    -- PRICE / FREE
+    {
+        patterns = {"price","cost","free","pay","buy","how much","paid"},
+        answers = {
+            "All DPM scripts are free. DPM Owner makes them and shares them freely.",
+            "Free. Every DPM script is free to use — no payment, no subscription.",
+        }
+    },
+    -- HELLO / HI
+    {
+        patterns = {"hello","hi","hey","sup","wassup","what's up","whats up","yo","greetings","good morning","good evening","good night"},
+        answers = {
+            "Hey! I'm DPM-AI. Ask me anything about DPM scripts or Roblox.",
+            "Hey there! DPM-AI ready. What do you need?",
+            "Sup. What can I help you with?",
+        }
+    },
+    -- THANKS
+    {
+        patterns = {"thank","thanks","ty","thx","appreciate","good bot","nice","cool","amazing","great","love it"},
+        answers = {
+            "No problem. DPM Owner made sure I know my stuff.",
+            "Anytime. That's what I'm here for.",
+            "Always. Ask anything else you need.",
+        }
+    },
+    -- ROBLOX GENERAL
+    {
+        patterns = {"what is roblox","roblox","roblox game","how roblox works"},
+        answers = {
+            "Roblox is an online game platform where users create and play games built in Roblox Studio using Lua. DPM scripts run inside Roblox via third-party executors.",
+        }
+    },
+    -- CAPABILITIES
+    {
+        patterns = {"what can you do","what do you know","your capabilities","help me","what can i ask"},
+        answers = {
+            "I can answer questions about: all DPM scripts, who made them, how they work, how to use them, Roblox scripting, executors, specific mods (aimbot, ESP, farm, etc.), and more.",
+            "Ask me about: DPM Premium, DPM Classic, DPM Rivals, Steal An Egg, how mods work, who made the scripts, how to install, specific features — anything DPM or Roblox.",
+        }
+    },
+}
+
+-- fallback pool
+local fallbacks = {
+    "I'm not sure about that specifically. But if it's about DPM scripts — DPM Owner built them all. Ask me something more specific.",
+    "Hmm, that's outside what I know best. Try asking about DPM scripts, specific mods, or Roblox cheats.",
+    "I don't have that info. But I know everything about DPM scripts — try asking about those.",
+    "Not sure on that one. Ask me who made the scripts, how they work, or about specific mods.",
+}
+
+local function getAIResponse(input)
+    local lower = input:lower()
+    -- find matching response
+    for _, entry in pairs(responses) do
+        for _, pat in pairs(entry.patterns) do
+            if lower:find(pat) then
+                local ans = entry.answers
+                return ans[math.random(1, #ans)]
+            end
+        end
+    end
+    -- fallback
+    return fallbacks[math.random(1, #fallbacks)]
+end
+
+-- =============================================
+--  THEME
+-- =============================================
+local T = {
+    glass     = Color3.fromRGB(10,10,12),
+    glassCard = Color3.fromRGB(20,20,24),
+    bar       = Color3.fromRGB(8,8,10),
+    white     = Color3.new(1,1,1),
+    offWhite  = Color3.fromRGB(200,200,212),
+    dim       = Color3.fromRGB(75,75,90),
+    dimDark   = Color3.fromRGB(38,38,48),
+    sep       = Color3.fromRGB(35,35,44),
+    red       = Color3.fromRGB(195,42,42),
+    userBubble= Color3.fromRGB(28,28,36),
+    aiBubble  = Color3.fromRGB(18,18,22),
+    inputBG   = Color3.fromRGB(16,16,20),
+}
+
+-- =============================================
+--  ROOT GUI
+-- =============================================
+local SG = Instance.new("ScreenGui")
+SG.Name           = "DPMAI"
+SG.ResetOnSpawn   = false
+SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+SG.IgnoreGuiInset = true
+SG.Parent         = game.CoreGui
+
+local blur = Instance.new("BlurEffect")
+blur.Size=0; blur.Parent=Lighting
+TweenService:Create(blur,TweenInfo.new(0.6),{Size=8}):Play()
+
+-- =============================================
+--  MAIN FRAME
+-- =============================================
+local MF = Instance.new("Frame")
+MF.Name="DPM_AI_Frame"
+MF.Size=UDim2.new(0,320,0,520)
+MF.Position=UDim2.new(0.5,-160,0.5,-260)
+MF.BackgroundColor3=T.glass
+MF.BackgroundTransparency=0.28
+MF.BorderSizePixel=0
+MF.ClipsDescendants=true
+MF.Parent=SG
+Instance.new("UICorner",MF).CornerRadius=UDim.new(0,18)
+
+local MFGrad=Instance.new("UIGradient")
+MFGrad.Color=ColorSequence.new({
+    ColorSequenceKeypoint.new(0,  Color3.fromRGB(32,32,42)),
+    ColorSequenceKeypoint.new(0.5,Color3.fromRGB(10,10,14)),
+    ColorSequenceKeypoint.new(1,  Color3.fromRGB(6,6,8)),
+})
+MFGrad.Rotation=148; MFGrad.Parent=MF
+
+local MFStroke=Instance.new("UIStroke")
+MFStroke.Color=Color3.new(1,1,1); MFStroke.Thickness=1.2
+MFStroke.Transparency=0.6; MFStroke.Parent=MF
+
+-- border pulse
+task.spawn(function()
+    local t=0
+    while MF and MF.Parent do
+        t=t+task.wait(0.05)
+        MFStroke.Transparency=0.44+math.sin(t*0.85)*0.3
+    end
+end)
+
+-- entrance animation
+MF.BackgroundTransparency=1
+MF.Size=UDim2.new(0,320*0.85,0,520*0.85)
+TweenService:Create(MF,TweenInfo.new(0.5,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{
+    Size=UDim2.new(0,320,0,520),
+    BackgroundTransparency=0.28,
+}):Play()
+
+-- top shimmer
+local TopShim=Instance.new("Frame")
+TopShim.Size=UDim2.new(1,0,0,2); TopShim.BackgroundColor3=Color3.new(1,1,1)
+TopShim.BackgroundTransparency=0.35; TopShim.BorderSizePixel=0
+TopShim.ZIndex=10; TopShim.Parent=MF
+local TSG=Instance.new("UIGradient"); TSG.Color=ColorSequence.new({
+    ColorSequenceKeypoint.new(0,Color3.new(0,0,0)),
+    ColorSequenceKeypoint.new(0.25,Color3.new(1,1,1)),
+    ColorSequenceKeypoint.new(0.75,Color3.new(1,1,1)),
+    ColorSequenceKeypoint.new(1,Color3.new(0,0,0)),
+}); TSG.Parent=TopShim
+task.spawn(function()
+    local t=0
+    while TopShim and TopShim.Parent do
+        t=t+task.wait(0.04)
+        TopShim.BackgroundTransparency=0.22+math.sin(t*1.4)*0.4
+    end
+end)
+
+-- =============================================
+--  TITLE BAR
+-- =============================================
+local TB=Instance.new("Frame")
+TB.Size=UDim2.new(1,0,0,52); TB.Position=UDim2.new(0,0,0,2)
+TB.BackgroundColor3=T.bar; TB.BackgroundTransparency=0.15
+TB.BorderSizePixel=0; TB.ZIndex=6; TB.Parent=MF
+Instance.new("UICorner",TB).CornerRadius=UDim.new(0,18)
+
+local TBFill=Instance.new("Frame")
+TBFill.Size=UDim2.new(1,0,0,18); TBFill.Position=UDim2.new(0,0,1,-18)
+TBFill.BackgroundColor3=T.bar; TBFill.BackgroundTransparency=0.15
+TBFill.BorderSizePixel=0; TBFill.ZIndex=6; TBFill.Parent=TB
+
+local TBGrad=Instance.new("UIGradient"); TBGrad.Color=ColorSequence.new({
+    ColorSequenceKeypoint.new(0,Color3.fromRGB(28,28,38)),
+    ColorSequenceKeypoint.new(1,Color3.fromRGB(8,8,12)),
+}); TBGrad.Rotation=90; TBGrad.Parent=TB
+
+local TBSep=Instance.new("Frame")
+TBSep.Size=UDim2.new(0.8,0,0,1); TBSep.Position=UDim2.new(0.1,0,1,0)
+TBSep.BackgroundColor3=Color3.new(1,1,1); TBSep.BackgroundTransparency=0.8
+TBSep.BorderSizePixel=0; TBSep.ZIndex=7; TBSep.Parent=TB
+
+-- AI avatar circle
+local Avatar=Instance.new("Frame")
+Avatar.Size=UDim2.new(0,32,0,32); Avatar.Position=UDim2.new(0,12,0.5,-16)
+Avatar.BackgroundColor3=Color3.fromRGB(20,20,26); Avatar.BackgroundTransparency=0.1
+Avatar.BorderSizePixel=0; Avatar.ZIndex=8; Avatar.Parent=TB
+Instance.new("UICorner",Avatar).CornerRadius=UDim.new(1,0)
+local AvStroke=Instance.new("UIStroke"); AvStroke.Color=Color3.new(1,1,1)
+AvStroke.Thickness=1; AvStroke.Transparency=0.5; AvStroke.Parent=Avatar
+local AvLbl=Instance.new("TextLabel"); AvLbl.Text="AI"
+AvLbl.Size=UDim2.new(1,0,1,0); AvLbl.BackgroundTransparency=1
+AvLbl.TextColor3=Color3.new(1,1,1); AvLbl.TextSize=11; AvLbl.Font=Enum.Font.GothamBold
+AvLbl.ZIndex=9; AvLbl.Parent=Avatar
+
+-- pulse avatar ring
+task.spawn(function()
+    local t=0
+    while Avatar and Avatar.Parent do
+        t=t+task.wait(0.05)
+        AvStroke.Transparency=0.3+math.abs(math.sin(t*1.6))*0.55
+    end
+end)
+
+-- title text
+local TitleLbl=Instance.new("TextLabel"); TitleLbl.Text="DPM — AI"
+TitleLbl.Size=UDim2.new(1,-110,0,20); TitleLbl.Position=UDim2.new(0,52,0,7)
+TitleLbl.BackgroundTransparency=1; TitleLbl.TextColor3=T.white; TitleLbl.TextSize=15
+TitleLbl.Font=Enum.Font.GothamBold; TitleLbl.TextXAlignment=Enum.TextXAlignment.Left
+TitleLbl.ZIndex=7; TitleLbl.Parent=TB
+local TGrad=Instance.new("UIGradient"); TGrad.Color=ColorSequence.new({
+    ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),
+    ColorSequenceKeypoint.new(1,Color3.fromRGB(155,155,170)),
+}); TGrad.Parent=TitleLbl
+
+local SubLbl=Instance.new("TextLabel"); SubLbl.Text="powered by DPM Owner"
+SubLbl.Size=UDim2.new(1,-110,0,13); SubLbl.Position=UDim2.new(0,52,0,28)
+SubLbl.BackgroundTransparency=1; SubLbl.TextColor3=T.dim; SubLbl.TextSize=9
+SubLbl.Font=Enum.Font.Gotham; SubLbl.TextXAlignment=Enum.TextXAlignment.Left
+SubLbl.ZIndex=7; SubLbl.Parent=TB
+
+-- status dot
+local StatusDot=Instance.new("Frame")
+StatusDot.Size=UDim2.new(0,7,0,7); StatusDot.Position=UDim2.new(0,52,0,29)
+StatusDot.BackgroundColor3=Color3.fromRGB(100,210,100); StatusDot.BackgroundTransparency=0.15
+StatusDot.BorderSizePixel=0; StatusDot.ZIndex=8; StatusDot.Parent=TB
+Instance.new("UICorner",StatusDot).CornerRadius=UDim.new(1,0)
+task.spawn(function()
+    local t=0
+    while StatusDot and StatusDot.Parent do
+        t=t+task.wait(0.06)
+        StatusDot.BackgroundTransparency=0.05+math.abs(math.sin(t*1.8))*0.5
+    end
+end)
+SubLbl.Position=UDim2.new(0,64,0,28) -- offset for dot
+
+-- close button
+local CloseBtn=Instance.new("TextButton"); CloseBtn.Text="✕"
+CloseBtn.Size=UDim2.new(0,26,0,26); CloseBtn.Position=UDim2.new(1,-32,0.5,-13)
+CloseBtn.BackgroundColor3=T.red; CloseBtn.BackgroundTransparency=0.15
+CloseBtn.TextColor3=T.white; CloseBtn.TextSize=12; CloseBtn.Font=Enum.Font.GothamBold
+CloseBtn.BorderSizePixel=0; CloseBtn.ZIndex=7; CloseBtn.Parent=TB
+Instance.new("UICorner",CloseBtn).CornerRadius=UDim.new(0,6)
+
+CloseBtn.MouseButton1Click:Connect(function()
+    TweenService:Create(MF,TweenInfo.new(0.35,Enum.EasingStyle.Back,Enum.EasingDirection.In),{
+        Size=UDim2.new(0,320,0,0),BackgroundTransparency=1
+    }):Play()
+    TweenService:Create(blur,TweenInfo.new(0.3),{Size=0}):Play()
+    task.delay(0.4,function() SG:Destroy() end)
+end)
+CloseBtn.MouseEnter:Connect(function()
+    TweenService:Create(CloseBtn,TweenInfo.new(0.12),{BackgroundTransparency=0}):Play()
+end)
+CloseBtn.MouseLeave:Connect(function()
+    TweenService:Create(CloseBtn,TweenInfo.new(0.12),{BackgroundTransparency=0.15}):Play()
+end)
+
+-- minimize
+local MinBtn=Instance.new("TextButton"); MinBtn.Text="─"
+MinBtn.Size=UDim2.new(0,26,0,26); MinBtn.Position=UDim2.new(1,-62,0.5,-13)
+MinBtn.BackgroundColor3=T.dimDark; MinBtn.BackgroundTransparency=0.15
+MinBtn.TextColor3=T.offWhite; MinBtn.TextSize=13; MinBtn.Font=Enum.Font.GothamBold
+MinBtn.BorderSizePixel=0; MinBtn.ZIndex=7; MinBtn.Parent=TB
+Instance.new("UICorner",MinBtn).CornerRadius=UDim.new(0,6)
+local MinS=Instance.new("UIStroke"); MinS.Color=Color3.new(1,1,1); MinS.Thickness=0.7
+MinS.Transparency=0.75; MinS.Parent=MinBtn
+
+local minimized=false
+MinBtn.MouseButton1Click:Connect(function()
+    minimized=not minimized
+    TweenService:Create(MF,TweenInfo.new(0.28,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{
+        Size=minimized and UDim2.new(0,320,0,54) or UDim2.new(0,320,0,520)
+    }):Play()
+    MinBtn.Text=minimized and "+" or "─"
+    TweenService:Create(blur,TweenInfo.new(0.3),{Size=minimized and 0 or 8}):Play()
+end)
+
+-- =============================================
+--  DRAG
+-- =============================================
+local drag,dragStart,frameStart=false,nil,nil
+local function startDrag(i)
+    if i.UserInputType==Enum.UserInputType.Touch or
+       i.UserInputType==Enum.UserInputType.MouseButton1 then
+        drag=true; dragStart=i.Position; frameStart=MF.Position
+    end
+end
+local function endDrag(i)
+    if i.UserInputType==Enum.UserInputType.Touch or
+       i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end
+end
+TB.InputBegan:Connect(startDrag); TB.InputEnded:Connect(endDrag)
+
+-- side strips
+for _,cfg in pairs({{0,0,10,0,0,0},{1,-10,10,0,0,0},{0,0,0,1,-10,10}}) do
+    local s=Instance.new("TextButton"); s.Text=""
+    s.Size=UDim2.new(cfg[3]==0 and 1 or 0,cfg[3],cfg[6]==0 and 1 or 0,cfg[6])
+    s.Position=UDim2.new(cfg[1],cfg[2],cfg[4],cfg[5])
+    s.BackgroundTransparency=1; s.BorderSizePixel=0; s.ZIndex=9; s.Parent=MF
+    s.InputBegan:Connect(startDrag); s.InputEnded:Connect(endDrag)
+end
+
+UserInputService.InputChanged:Connect(function(i)
+    if drag and (i.UserInputType==Enum.UserInputType.Touch or
+                 i.UserInputType==Enum.UserInputType.MouseMovement) then
+        local d=i.Position-dragStart
+        MF.Position=UDim2.new(
+            frameStart.X.Scale,frameStart.X.Offset+d.X,
+            frameStart.Y.Scale,frameStart.Y.Offset+d.Y)
+    end
+end)
+
+-- =============================================
+--  CHAT SCROLL AREA
+-- =============================================
+local ChatFrame=Instance.new("ScrollingFrame")
+ChatFrame.Name="ChatFrame"
+ChatFrame.Size=UDim2.new(1,0,1,-118)
+ChatFrame.Position=UDim2.new(0,0,0,54)
+ChatFrame.BackgroundTransparency=1
+ChatFrame.BorderSizePixel=0
+ChatFrame.ScrollBarThickness=2
+ChatFrame.ScrollBarImageColor3=Color3.fromRGB(55,55,70)
+ChatFrame.CanvasSize=UDim2.new(0,0,0,0)
+ChatFrame.AutomaticCanvasSize=Enum.AutomaticSize.Y
+ChatFrame.ScrollingDirection=Enum.ScrollingDirection.Y
+ChatFrame.ZIndex=3
+ChatFrame.Parent=MF
+
+local ChatList=Instance.new("UIListLayout")
+ChatList.Padding=UDim.new(0,8)
+ChatList.SortOrder=Enum.SortOrder.LayoutOrder
+ChatList.HorizontalAlignment=Enum.HorizontalAlignment.Center
+ChatList.Parent=ChatFrame
+
+local ChatPad=Instance.new("UIPadding")
+ChatPad.PaddingTop=UDim.new(0,10); ChatPad.PaddingBottom=UDim.new(0,10)
+ChatPad.PaddingLeft=UDim.new(0,8); ChatPad.PaddingRight=UDim.new(0,8)
+ChatPad.Parent=ChatFrame
+
+-- =============================================
+--  INPUT AREA
+-- =============================================
+local InputArea=Instance.new("Frame")
+InputArea.Size=UDim2.new(1,0,0,64)
+InputArea.Position=UDim2.new(0,0,1,-64)
+InputArea.BackgroundColor3=T.bar; InputArea.BackgroundTransparency=0.1
+InputArea.BorderSizePixel=0; InputArea.ZIndex=6; InputArea.Parent=MF
+
+local IAGrad=Instance.new("UIGradient"); IAGrad.Color=ColorSequence.new({
+    ColorSequenceKeypoint.new(0,Color3.fromRGB(20,20,28)),
+    ColorSequenceKeypoint.new(1,Color3.fromRGB(8,8,12)),
+}); IAGrad.Rotation=90; IAGrad.Parent=InputArea
+
+local IASep=Instance.new("Frame")
+IASep.Size=UDim2.new(0.88,0,0,1); IASep.Position=UDim2.new(0.06,0,0,0)
+IASep.BackgroundColor3=Color3.new(1,1,1); IASep.BackgroundTransparency=0.82
+IASep.BorderSizePixel=0; IASep.ZIndex=7; IASep.Parent=InputArea
+
+-- text input box
+local InputBox=Instance.new("TextBox")
+InputBox.Text=""; InputBox.PlaceholderText="Ask DPM-AI anything..."
+InputBox.Size=UDim2.new(1,-58,0,38); InputBox.Position=UDim2.new(0,10,0.5,-19)
+InputBox.BackgroundColor3=T.inputBG; InputBox.BackgroundTransparency=0.15
+InputBox.TextColor3=T.offWhite; InputBox.PlaceholderColor3=T.dim
+InputBox.TextSize=11; InputBox.Font=Enum.Font.Gotham
+InputBox.TextXAlignment=Enum.TextXAlignment.Left
+InputBox.ClearTextOnFocus=false; InputBox.MultiLine=false
+InputBox.BorderSizePixel=0; InputBox.ZIndex=7; InputBox.Parent=InputArea
+Instance.new("UICorner",InputBox).CornerRadius=UDim.new(0,10)
+local IBStroke=Instance.new("UIStroke"); IBStroke.Color=Color3.new(1,1,1)
+IBStroke.Thickness=0.7; IBStroke.Transparency=0.78; IBStroke.Parent=InputBox
+local IBPad=Instance.new("UIPadding")
+IBPad.PaddingLeft=UDim.new(0,10); IBPad.PaddingRight=UDim.new(0,10); IBPad.Parent=InputBox
+
+-- send button
+local SendBtn=Instance.new("TextButton"); SendBtn.Text="↑"
+SendBtn.Size=UDim2.new(0,38,0,38); SendBtn.Position=UDim2.new(1,-48,0.5,-19)
+SendBtn.BackgroundColor3=Color3.fromRGB(22,22,30); SendBtn.BackgroundTransparency=0.05
+SendBtn.TextColor3=T.white; SendBtn.TextSize=18; SendBtn.Font=Enum.Font.GothamBold
+SendBtn.BorderSizePixel=0; SendBtn.ZIndex=7; SendBtn.Parent=InputArea
+Instance.new("UICorner",SendBtn).CornerRadius=UDim.new(0,10)
+local SBStroke=Instance.new("UIStroke"); SBStroke.Color=Color3.new(1,1,1)
+SBStroke.Thickness=0.8; SBStroke.Transparency=0.65; SBStroke.Parent=SendBtn
+
+SendBtn.MouseEnter:Connect(function()
+    TweenService:Create(SendBtn,TweenInfo.new(0.12),{BackgroundColor3=Color3.new(1,1,1),TextColor3=Color3.fromRGB(10,10,14)}):Play()
+end)
+SendBtn.MouseLeave:Connect(function()
+    TweenService:Create(SendBtn,TweenInfo.new(0.12),{BackgroundColor3=Color3.fromRGB(22,22,30),TextColor3=T.white}):Play()
+end)
+
+-- focus glow on input
+InputBox.Focused:Connect(function()
+    TweenService:Create(IBStroke,TweenInfo.new(0.2),{Transparency=0.45}):Play()
+end)
+InputBox.FocusLost:Connect(function()
+    TweenService:Create(IBStroke,TweenInfo.new(0.2),{Transparency=0.78}):Play()
+end)
+
+-- =============================================
+--  CHAT BUBBLE BUILDER
+-- =============================================
+local messageCount=0
+
+local function scrollToBottom()
+    task.wait(0.05)
+    ChatFrame.CanvasPosition=Vector2.new(0,ChatFrame.AbsoluteCanvasSize.Y)
+end
+
+local function addBubble(text, isUser)
+    messageCount=messageCount+1
+
+    -- wrapper frame (full width for alignment)
+    local wrapper=Instance.new("Frame")
+    wrapper.Name="Msg"..messageCount
+    wrapper.Size=UDim2.new(1,0,0,0)
+    wrapper.AutomaticSize=Enum.AutomaticSize.Y
+    wrapper.BackgroundTransparency=1
+    wrapper.BorderSizePixel=0
+    wrapper.LayoutOrder=messageCount
+    wrapper.ZIndex=4
+    wrapper.Parent=ChatFrame
+
+    -- label for measuring
+    local measure=Instance.new("TextLabel")
+    measure.Text=text
+    measure.Size=UDim2.new(0,200,0,0)
+    measure.AutomaticSize=Enum.AutomaticSize.XY
+    measure.BackgroundTransparency=1
+    measure.TextColor3=Color3.new(1,1,1)
+    measure.TextSize=11
+    measure.Font=Enum.Font.Gotham
+    measure.TextWrapped=true
+    measure.MaxVisibleGraphemes=0 -- hidden, just for size
+    measure.Parent=SG
+
+    task.wait() -- let size compute
+    local textH = math.max(36, measure.TextBounds.Y + 24)
+    local textW = math.min(measure.TextBounds.X + 24, 210)
+    measure:Destroy()
+
+    -- bubble
+    local bubble=Instance.new("Frame")
+    bubble.Size=UDim2.new(0,textW,0,textH)
+    bubble.AutomaticSize=Enum.AutomaticSize.Y
+    bubble.BackgroundColor3=isUser and T.userBubble or T.aiBubble
+    bubble.BackgroundTransparency=0.15
+    bubble.BorderSizePixel=0
+    bubble.ZIndex=5
+    bubble.Parent=wrapper
+    Instance.new("UICorner",bubble).CornerRadius=UDim.new(0,12)
+
+    -- position right for user, left for AI
+    if isUser then
+        bubble.Position=UDim2.new(1,-textW-4,0,0)
+        bubble.AnchorPoint=Vector2.new(0,0)
+    else
+        bubble.Position=UDim2.new(0,4,0,0)
+    end
+
+    -- bubble gradient
+    local bGrad=Instance.new("UIGradient"); bGrad.Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0,isUser and Color3.fromRGB(32,32,44) or Color3.fromRGB(22,22,30)),
+        ColorSequenceKeypoint.new(1,isUser and Color3.fromRGB(18,18,26) or Color3.fromRGB(12,12,16)),
+    }); bGrad.Rotation=135; bGrad.Parent=bubble
+
+    -- bubble stroke
+    local bStroke=Instance.new("UIStroke"); bStroke.Color=Color3.new(1,1,1)
+    bStroke.Thickness=0.7; bStroke.Transparency=isUser and 0.75 or 0.85; bStroke.Parent=bubble
+
+    -- top shimmer on AI bubbles
+    if not isUser then
+        local shim=Instance.new("Frame"); shim.Size=UDim2.new(0.6,0,0,1)
+        shim.Position=UDim2.new(0.2,0,0,0); shim.BackgroundColor3=Color3.new(1,1,1)
+        shim.BackgroundTransparency=0.65; shim.BorderSizePixel=0; shim.ZIndex=6; shim.Parent=bubble
+        Instance.new("UICorner",shim).CornerRadius=UDim.new(1,0)
+    end
+
+    -- sender label
+    local senderLbl=Instance.new("TextLabel")
+    senderLbl.Text=isUser and "You" or "DPM-AI"
+    senderLbl.Size=UDim2.new(1,-10,0,12)
+    senderLbl.Position=UDim2.new(0,8,0,5)
+    senderLbl.BackgroundTransparency=1
+    senderLbl.TextColor3=isUser and T.dim or Color3.fromRGB(140,140,160)
+    senderLbl.TextSize=8; senderLbl.Font=Enum.Font.GothamBold
+    senderLbl.TextXAlignment=Enum.TextXAlignment.Left
+    senderLbl.ZIndex=6; senderLbl.Parent=bubble
+
+    -- message label
+    local msgLbl=Instance.new("TextLabel")
+    msgLbl.Text=""
+    msgLbl.Size=UDim2.new(1,-16,0,0)
+    msgLbl.Position=UDim2.new(0,8,0,18)
+    msgLbl.AutomaticSize=Enum.AutomaticSize.Y
+    msgLbl.BackgroundTransparency=1
+    msgLbl.TextColor3=isUser and T.offWhite or Color3.new(1,1,1)
+    msgLbl.TextSize=11; msgLbl.Font=Enum.Font.Gotham
+    msgLbl.TextWrapped=true
+    msgLbl.TextXAlignment=Enum.TextXAlignment.Left
+    msgLbl.ZIndex=6; msgLbl.Parent=bubble
+
+    -- entrance animation
+    bubble.BackgroundTransparency=1
+    TweenService:Create(bubble,TweenInfo.new(0.25,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
+        BackgroundTransparency=0.15
+    }):Play()
+
+    -- typewriter effect for AI
+    if not isUser then
+        task.spawn(function()
+            for i=1,#text do
+                msgLbl.Text=text:sub(1,i)
+                task.wait(0.018)
+            end
+            scrollToBottom()
+        end)
+    else
+        msgLbl.Text=text
+        scrollToBottom()
+    end
+
+    wrapper.Size=UDim2.new(1,0,0,textH+8)
+    return bubble
+end
+
+-- =============================================
+--  TYPING INDICATOR
+-- =============================================
+local typingWrapper=nil
+local typingBubble=nil
+local typingConn=nil
+
+local function showTyping()
+    typingWrapper=Instance.new("Frame")
+    typingWrapper.Name="Typing"
+    typingWrapper.Size=UDim2.new(1,0,0,44)
+    typingWrapper.BackgroundTransparency=1
+    typingWrapper.BorderSizePixel=0
+    typingWrapper.LayoutOrder=9999
+    typingWrapper.ZIndex=4
+    typingWrapper.Parent=ChatFrame
+
+    typingBubble=Instance.new("Frame")
+    typingBubble.Size=UDim2.new(0,70,0,34)
+    typingBubble.Position=UDim2.new(0,4,0,0)
+    typingBubble.BackgroundColor3=T.aiBubble
+    typingBubble.BackgroundTransparency=0.15
+    typingBubble.BorderSizePixel=0; typingBubble.ZIndex=5; typingBubble.Parent=typingWrapper
+    Instance.new("UICorner",typingBubble).CornerRadius=UDim.new(0,12)
+
+    local tGrad=Instance.new("UIGradient"); tGrad.Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0,Color3.fromRGB(22,22,30)),
+        ColorSequenceKeypoint.new(1,Color3.fromRGB(12,12,16)),
+    }); tGrad.Rotation=135; tGrad.Parent=typingBubble
+
+    -- three dots
+    local dotHolder=Instance.new("Frame"); dotHolder.Size=UDim2.new(1,0,1,0)
+    dotHolder.BackgroundTransparency=1; dotHolder.ZIndex=6; dotHolder.Parent=typingBubble
+    local dLayout=Instance.new("UIListLayout"); dLayout.FillDirection=Enum.FillDirection.Horizontal
+    dLayout.HorizontalAlignment=Enum.HorizontalAlignment.Center
+    dLayout.VerticalAlignment=Enum.VerticalAlignment.Center
+    dLayout.Padding=UDim.new(0,5); dLayout.Parent=dotHolder
+
+    local dots={}
+    for i=1,3 do
+        local d=Instance.new("Frame"); d.Size=UDim2.new(0,7,0,7)
+        d.BackgroundColor3=T.dim; d.BackgroundTransparency=0.2
+        d.BorderSizePixel=0; d.ZIndex=7; d.Parent=dotHolder
+        Instance.new("UICorner",d).CornerRadius=UDim.new(1,0)
+        dots[i]=d
+    end
+
+    -- animate dots
+    typingConn=RunService.Heartbeat:Connect(function()
+        local t=tick()
+        for i,d in pairs(dots) do
+            local offset=(i-1)*0.25
+            local v=0.5+math.sin((t+offset)*4)*0.5
+            d.BackgroundColor3=Color3.fromRGB(
+                math.floor(255*v),math.floor(255*v),math.floor(255*v))
+            d.BackgroundTransparency=0.15+math.abs(math.sin((t+offset)*4))*0.5
+        end
+    end)
+
+    TweenService:Create(typingBubble,TweenInfo.new(0.2),{BackgroundTransparency=0.15}):Play()
+    scrollToBottom()
+end
+
+local function hideTyping()
+    if typingConn then typingConn:Disconnect(); typingConn=nil end
+    if typingWrapper then typingWrapper:Destroy(); typingWrapper=nil end
+    typingBubble=nil
+end
+
+-- =============================================
+--  QUICK SUGGESTIONS
+-- =============================================
+local suggestions={
+    "Who made the scripts?",
+    "What is DPM Premium?",
+    "How do I use the scripts?",
+    "What is DPM Steal An Egg?",
+    "How does aimbot work?",
+    "List all DPM scripts",
+}
+
+local SuggestFrame=Instance.new("ScrollingFrame")
+SuggestFrame.Size=UDim2.new(1,0,0,32)
+SuggestFrame.Position=UDim2.new(0,0,1,-100)
+SuggestFrame.BackgroundTransparency=1; SuggestFrame.BorderSizePixel=0
+SuggestFrame.ScrollBarThickness=0; SuggestFrame.CanvasSize=UDim2.new(0,0,0,0)
+SuggestFrame.AutomaticCanvasSize=Enum.AutomaticSize.X
+SuggestFrame.ScrollingDirection=Enum.ScrollingDirection.X
+SuggestFrame.ZIndex=7; SuggestFrame.Parent=MF
+
+local SuggestList=Instance.new("UIListLayout")
+SuggestList.FillDirection=Enum.FillDirection.Horizontal
+SuggestList.VerticalAlignment=Enum.VerticalAlignment.Center
+SuggestList.Padding=UDim.new(0,5); SuggestList.Parent=SuggestFrame
+local SP=Instance.new("UIPadding"); SP.PaddingLeft=UDim.new(0,8); SP.PaddingRight=UDim.new(0,8); SP.Parent=SuggestFrame
+
+local function sendMessage(text)
+    if text=="" or text:len()<1 then return end
+    InputBox.Text=""
+    addBubble(text,true)
+    showTyping()
+    -- simulate think time
+    local thinkTime=0.6+math.random()*0.8
+    task.delay(thinkTime,function()
+        hideTyping()
+        local response=getAIResponse(text)
+        addBubble(response,false)
+    end)
+end
+
+for _,q in pairs(suggestions) do
+    local pill=Instance.new("TextButton"); pill.Text=q
+    local tw=string.len(q)*6.5+20
+    pill.Size=UDim2.new(0,tw,0,24)
+    pill.BackgroundColor3=Color3.fromRGB(18,18,24); pill.BackgroundTransparency=0.1
+    pill.TextColor3=T.dim; pill.TextSize=9; pill.Font=Enum.Font.Gotham
+    pill.BorderSizePixel=0; pill.ZIndex=8; pill.Parent=SuggestFrame
+    Instance.new("UICorner",pill).CornerRadius=UDim.new(1,0)
+    local pS=Instance.new("UIStroke"); pS.Color=Color3.new(1,1,1); pS.Thickness=0.6
+    pS.Transparency=0.82; pS.Parent=pill
+
+    pill.MouseEnter:Connect(function()
+        TweenService:Create(pill,TweenInfo.new(0.15),{
+            BackgroundColor3=Color3.fromRGB(28,28,38),TextColor3=T.offWhite
+        }):Play()
+        TweenService:Create(pS,TweenInfo.new(0.15),{Transparency=0.55}):Play()
+    end)
+    pill.MouseLeave:Connect(function()
+        TweenService:Create(pill,TweenInfo.new(0.15),{
+            BackgroundColor3=Color3.fromRGB(18,18,24),TextColor3=T.dim
+        }):Play()
+        TweenService:Create(pS,TweenInfo.new(0.15),{Transparency=0.82}):Play()
+    end)
+    pill.MouseButton1Click:Connect(function()
+        sendMessage(q)
+    end)
+end
+
+-- =============================================
+--  SEND LOGIC
+-- =============================================
+SendBtn.MouseButton1Click:Connect(function()
+    sendMessage(InputBox.Text)
+end)
+
+InputBox.FocusLost:Connect(function(enter)
+    if enter then sendMessage(InputBox.Text) end
+end)
+
+-- =============================================
+--  WELCOME MESSAGE
+-- =============================================
+task.delay(0.8,function()
+    addBubble("hey! i'm DPM-AI — built by DPM Owner. ask me anything about DPM scripts, mods, or Roblox.",false)
+end)
+
+print("DPM-AI — loaded and ready")
