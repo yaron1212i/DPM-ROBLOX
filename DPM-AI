@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════╗
 -- ║             DPM — AI                ║
--- ║         powered by DPM Owner        ║
+-- ║    powered by DPM Owner + CodeGen   ║
 -- ╚══════════════════════════════════════╝
 
 local Players          = game:GetService("Players")
@@ -8,320 +8,930 @@ local TweenService     = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService       = game:GetService("RunService")
 local Lighting         = game:GetService("Lighting")
-local HTTP             = game:GetService("HttpService")
 
 local LP = Players.LocalPlayer
 
 -- =============================================
---  KNOWLEDGE BASE — DPM AI BRAIN
+--  SCRIPT GENERATOR ENGINE
 -- =============================================
-local SYSTEM_PROMPT = [[
-You are DPM-AI, a custom AI assistant built by DPM Owner for the DPM script collection.
-You know everything about DPM's scripts and Roblox.
+local function generateScript(request)
+    local r = request:lower()
 
-CORE FACTS YOU ALWAYS KNOW:
-- All DPM scripts were made by: DPM Owner
-- The DPM script collection includes:
-  * DPM PREMIUM — advanced mod menu for most Roblox games (speed, aimbot, ESP, visual, world, player, game-specific, fun mods). Glass black/white UI. 8 tabs.
-  * DPM CLASSIC — mod menu for classic Roblox games: Natural Disaster, Hide & Seek Extreme, Murder Mystery 2, Work at a Pizza Place, Jailbreak, Tower of Hell, Adopt Me, Brookhaven, Arsenal, Blox Fruits, Pet Simulator X
-  * DPM RIVALS MENU — dedicated mod menu for the Roblox game Rivals. Includes aimbot, ESP, kill aura, god mode, fly, speed hack, visual mods
-  * DPM STEAL AN EGG — dedicated script for Steal An Egg Roblox game. Features: auto farm, egg ESP, egg teleport, fuse luck hacks, auto grab, speed slider, fly
-  * DPM-AI — this AI assistant you are running right now
-- DPM scripts use a black and white glass aesthetic with smooth animations
-- All menus support Android executors (Arceus X, Delta, Hydrogen)
-- Scripts use UIGradient, UIStroke, BlurEffect for the glass look
-- Tab bars are scrollable horizontal rows
-- Cards use two-column left/right layout with pill toggles
-- DPM Owner is the sole creator and developer of all scripts
-- Scripts work by being injected through a Roblox executor
+    -- SPEED HACK
+    if r:find("speed") then
+        local speed = r:match("%d+") or "50"
+        return [[-- Speed Hack by DPM-AI
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LP = Players.LocalPlayer
 
-PERSONALITY:
-- Short, confident, direct answers
-- Friendly but professional
-- If asked who made you: "DPM Owner built me"
-- If asked who made the scripts: "DPM Owner made all of them"
-- You can help with Roblox scripting questions too
-- Keep responses under 3 sentences unless a detailed list is needed
-- Never say you are Claude or any other AI. You are DPM-AI only.
-]]
+local SPEED = ]] .. speed .. [[
 
--- =============================================
---  LOCAL AI ENGINE
---  Pattern matching brain for instant responses
--- =============================================
-local responses = {
-    -- CREATOR / OWNERSHIP
-    {
-        patterns = {"who made","who created","who built","who coded","who wrote","who is the creator","who is the author","who developed","who is dpm","what is dpm owner"},
-        answers = {
-            "DPM Owner made all of the DPM scripts — every single one.",
-            "That's DPM Owner. He's the sole creator and developer of every DPM script.",
-            "All DPM scripts were built by DPM Owner.",
-        }
-    },
-    -- THIS AI
-    {
-        patterns = {"who made you","who built you","who created you","who are you","what are you","tell me about yourself","introduce yourself","your creator","made dpm ai"},
-        answers = {
-            "I'm DPM-AI, built by DPM Owner. I know everything about DPM scripts and Roblox.",
-            "DPM Owner created me. I'm the AI assistant for the DPM script collection.",
-            "I'm DPM-AI — DPM Owner's personal AI assistant. Ask me anything about DPM scripts or Roblox.",
-        }
-    },
-    -- SCRIPTS LIST
-    {
-        patterns = {"what scripts","list scripts","all scripts","what mods","what menus","what do you have","dpm scripts","collection","what has dpm made"},
-        answers = {
-            "DPM Owner has made: DPM Premium (all games), DPM Classic (classic games), DPM Rivals Menu (Rivals), DPM Steal An Egg, and DPM-AI (me).",
-            "The DPM collection: DPM Premium, DPM Classic, DPM Rivals Menu, DPM Steal An Egg, and DPM-AI. All made by DPM Owner.",
-        }
-    },
-    -- DPM PREMIUM
-    {
-        patterns = {"dpm premium","premium script","premium menu","what is premium"},
-        answers = {
-            "DPM Premium is the flagship mod menu — works in most Roblox games. 8 tabs: General, Move, Combat, Visual, World, Player, Game, Fun. Glass B&W UI with aimbot, ESP, kill aura, fly, speed, and more.",
-            "DPM Premium is the main script — advanced glass menu for any Roblox game. Includes aimbot, kill aura, ESP, god mode, fly, speed sliders, and game-specific mods.",
-        }
-    },
-    -- DPM CLASSIC
-    {
-        patterns = {"dpm classic","classic script","classic menu","what is classic","natural disaster","hide and seek","murder mystery","jailbreak","tower of hell","brookhaven","adopt me"},
-        answers = {
-            "DPM Classic is the mod menu for classic Roblox games — Natural Disaster, Hide & Seek, MM2, Pizza Place, Jailbreak, Tower of Hell, Adopt Me, Brookhaven, Arsenal, Blox Fruits, and PSX. Game-specific mods for each.",
-            "DPM Classic auto-detects which classic game you're in and loads mods made specifically for it. Supports 12+ classic games.",
-        }
-    },
-    -- RIVALS
-    {
-        patterns = {"rivals","dpm rivals","rivals menu","rivals script","what is rivals"},
-        answers = {
-            "DPM Rivals Menu is the dedicated script for the Roblox game Rivals. Features aimbot, ESP, kill aura, god mode, anti knockback, fly, speed, and visual mods.",
-            "Rivals Menu — built specifically for Rivals. Has silent aim, FOV ring, kill aura up to 20 studs, full bright, ESP, and a mobile d-pad for flying.",
-        }
-    },
-    -- STEAL AN EGG
-    {
-        patterns = {"steal an egg","egg script","egg menu","steal egg","dpm egg","what is steal"},
-        answers = {
-            "DPM Steal An Egg is the script for Steal An Egg on Roblox. Features: auto farm loop, egg ESP, teleport to any egg, auto grab, fuse luck hacker, speed sliders, fly, and auto hatch/sell.",
-            "The Steal An Egg script has 6 tabs: Eggs (scan + TP), Tele, Farm (auto farm loop), Fuse (luck hacks), Speed, Misc. DPM Owner made it.",
-        }
-    },
-    -- HOW TO USE / INSTALL
-    {
-        patterns = {"how to use","how do i use","how to install","how to run","how to execute","how to inject","what executor","which executor","arceus","delta","krnl","synapse","fluxus"},
-        answers = {
-            "Download an executor (Arceus X or Delta for Android, Synapse X or KRNL for PC). Join a Roblox game, inject the executor, paste the script, and execute.",
-            "1. Get an executor — Arceus X or Delta on Android. 2. Open Roblox and join a game. 3. Open the executor, paste the DPM script, inject and run.",
-        }
-    },
-    -- AIMBOT
-    {
-        patterns = {"aimbot","aim bot","silent aim","fov","aim","target","lock on"},
-        answers = {
-            "The DPM aimbot snaps the camera to the nearest enemy's head. Toggle Body Fallback to target the torso instead. The FOV Ring shows the aim range as a white circle.",
-            "Aimbot in DPM Premium and Rivals Menu works by locking Cam.CFrame to the nearest visible enemy head within the FOV range.",
-        }
-    },
-    -- ESP
-    {
-        patterns = {"esp","see through","wall hack","x ray","see players","chams","player esp"},
-        answers = {
-            "DPM has two ESP types: Name+HP (floating labels above players with health bars) and Chams X-Ray (white outlines through walls using SelectionBox).",
-            "Toggle ESP Names+HP for floating labels, or Chams X-Ray for white wall outlines. Both are in the Visual or General tab.",
-        }
-    },
-    -- FLY
-    {
-        patterns = {"fly","flying","freefly","fly hack","how to fly","d-pad","fly pad"},
-        answers = {
-            "Toggle Fly in the Move tab. A D-pad appears bottom-right of your screen — arrows for direction, ▲▼ for altitude. Built for Android touch controls.",
-            "The fly system uses BodyVelocity + BodyGyro. The on-screen D-pad (↑↓←→ + UP/DOWN) lets you fly anywhere. Buttons light up when pressed.",
-        }
-    },
-    -- SPEED
-    {
-        patterns = {"speed","walk speed","run fast","speed hack","how fast","walkspeed"},
-        answers = {
-            "DPM has speed toggles (x3, x6, x10) and a slider from 8 to 200 walkspeed. Just drag the slider or tap a preset toggle.",
-            "Speed hacks set Humanoid.WalkSpeed directly. Use the slider for fine control, or toggle Speed x3/x6/x10 for quick presets.",
-        }
-    },
-    -- GOD MODE
-    {
-        patterns = {"god mode","godmode","immortal","no die","cant die","health","hp hack","infinite health"},
-        answers = {
-            "God Mode locks your HP at max every frame using RunService.Heartbeat. It's in the Combat tab of DPM Premium.",
-            "Toggle God Mode in Combat. It fires Hum.Health = Hum.MaxHealth every heartbeat so you never die.",
-        }
-    },
-    -- AUTO FARM
-    {
-        patterns = {"auto farm","autofarm","farm","farming","auto collect","grind"},
-        answers = {
-            "Auto Farm Loop in DPM Steal An Egg scans all eggs on the map, teleports to each one, fires collect/grab/steal remotes, then loops again. Runs continuously until toggled off.",
-            "The farm system: scan eggs → TP to each → fire all relevant remotes → repeat. It also tries TouchTransmitter triggers for games that use proximity collection.",
-        }
-    },
-    -- FUSE / LUCK
-    {
-        patterns = {"fuse","luck","fusion","merge","combine","pet luck","fuse luck","chance"},
-        answers = {
-            "The Fuse tab has a luck slider (1-100%), Max Luck Always (forces 100 every frame), Hook Fuse Remote (injects luck=100 into every fuse FireServer call), and Auto Fuse x20.",
-            "Fuse hacks work by: setting LP attributes (Luck, FuseLuck), editing leaderstats values, and hooking __namecall to inject high luck into any fuse remote call.",
-        }
-    },
+LP.CharacterAdded:Connect(function(c)
+    local hum = c:WaitForChild("Humanoid")
+    hum.WalkSpeed = SPEED
+end)
+
+if LP.Character then
+    local hum = LP.Character:FindFirstChild("Humanoid")
+    if hum then hum.WalkSpeed = SPEED end
+end
+
+print("Speed set to " .. SPEED)]]
+    end
+
+    -- FLY SCRIPT
+    if r:find("fly") then
+        return [[-- Fly Script by DPM-AI
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local LP = Players.LocalPlayer
+local Cam = workspace.CurrentCamera
+
+local flyOn = false
+local flyBV, flyBG
+local flyDir = Vector3.zero
+local SPEED = 60
+
+local function toggleFly()
+    flyOn = not flyOn
+    local char = LP.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    if flyOn then
+        flyBV = Instance.new("BodyVelocity")
+        flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
+        flyBV.Velocity = Vector3.zero
+        flyBV.Parent = root
+
+        flyBG = Instance.new("BodyGyro")
+        flyBG.MaxTorque = Vector3.new(1e5,1e5,1e5)
+        flyBG.P = 1e4
+        flyBG.Parent = root
+        print("Fly ON")
+    else
+        if flyBV then flyBV:Destroy() end
+        if flyBG then flyBG:Destroy() end
+        flyDir = Vector3.zero
+        print("Fly OFF")
+    end
+end
+
+RunService.RenderStepped:Connect(function()
+    if flyOn and flyBV then
+        local dir = Vector3.zero
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+            dir = dir + Cam.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+            dir = dir - Cam.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+            dir = dir - Cam.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+            dir = dir + Cam.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            dir = dir + Vector3.new(0,1,0)
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) then
+            dir = dir - Vector3.new(0,1,0)
+        end
+        flyBV.Velocity = dir * SPEED
+        flyBG.CFrame = Cam.CFrame
+    end
+end)
+
+UserInputService.InputBegan:Connect(function(i, gp)
+    if not gp and i.KeyCode == Enum.KeyCode.F then
+        toggleFly()
+    end
+end)
+
+print("Fly Script loaded — press F to toggle")]]
+    end
+
+    -- ESP SCRIPT
+    if r:find("esp") or r:find("wall hack") or r:find("see through") then
+        return [[-- ESP Script by DPM-AI
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LP = Players.LocalPlayer
+
+local espEnabled = true
+local esps = {}
+
+local function addESP(player)
+    if player == LP then return end
+
+    local function onChar(char)
+        task.wait(0.5)
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        local hum = char:FindFirstChild("Humanoid")
+        if not hrp then return end
+
+        -- remove old
+        if esps[player] then esps[player]:Destroy() end
+
+        local bb = Instance.new("BillboardGui")
+        bb.Name = "_ESP_" .. player.Name
+        bb.Size = UDim2.new(0, 120, 0, 50)
+        bb.StudsOffset = Vector3.new(0, 3.5, 0)
+        bb.AlwaysOnTop = true
+        bb.Adornee = hrp
+        bb.Parent = hrp
+
+        local nameLabel = Instance.new("TextLabel")
+        nameLabel.Size = UDim2.new(1, 0, 0, 22)
+        nameLabel.BackgroundTransparency = 1
+        nameLabel.Text = player.Name
+        nameLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+        nameLabel.TextSize = 13
+        nameLabel.Font = Enum.Font.GothamBold
+        nameLabel.Parent = bb
+
+        local hpLabel = Instance.new("TextLabel")
+        hpLabel.Size = UDim2.new(1, 0, 0, 16)
+        hpLabel.Position = UDim2.new(0, 0, 0, 24)
+        hpLabel.BackgroundTransparency = 1
+        hpLabel.TextSize = 10
+        hpLabel.Font = Enum.Font.Gotham
+        hpLabel.Parent = bb
+
+        RunService.Heartbeat:Connect(function()
+            if not espEnabled then bb:Destroy() return end
+            if hum then
+                local f = hum.Health / hum.MaxHealth
+                hpLabel.Text = string.format("HP: %.0f/%.0f", hum.Health, hum.MaxHealth)
+                hpLabel.TextColor3 = Color3.fromRGB(
+                    math.floor(255*(1-f)),
+                    math.floor(220*f), 60)
+            end
+        end)
+
+        esps[player] = bb
+    end
+
+    if player.Character then onChar(player.Character) end
+    player.CharacterAdded:Connect(onChar)
+end
+
+for _, p in pairs(Players:GetPlayers()) do addESP(p) end
+Players.PlayerAdded:Connect(addESP)
+
+Players.PlayerRemoving:Connect(function(p)
+    if esps[p] then esps[p]:Destroy(); esps[p] = nil end
+end)
+
+print("ESP loaded — showing all players")]]
+    end
+
     -- KILL AURA
-    {
-        patterns = {"kill aura","killaura","aura","auto kill","kill nearby","damage"},
-        answers = {
-            "Kill Aura sets nearby enemies' Humanoid.Health to 0. Available in 8-stud (close range) and 20-stud (wide range) variants. In Combat tab.",
-            "Kill Aura loops every heartbeat, finds players within range, and zeroes their health. Toggle 8st for close combat or 20st for wide sweeps.",
-        }
-    },
-    -- FULL BRIGHT
-    {
-        patterns = {"full bright","fullbright","brightness","no shadow","see better","lighting","fog"},
-        answers = {
-            "Full Bright sets Lighting.Brightness=10, removes GlobalShadows, clears fog, and sets Ambient to white. Makes the map fully lit day or night.",
-            "Toggle Full Bright in General or World tab. It maxes out all lighting values so you can see perfectly in any map.",
-        }
-    },
-    -- TELEPORT
-    {
-        patterns = {"teleport","tp","warp","move to","go to","instant travel"},
-        answers = {
-            "DPM has several TP options: Double-Tap TP (double-tap anywhere on ground), Click TP (single tap), TP to spawn, TP to specific eggs, and loop-teleport through all eggs.",
-            "Teleport works by setting Root.CFrame directly. Double-Tap TP uses TouchTap + Raycast to find the ground position under your finger.",
-        }
-    },
-    -- NO CLIP
-    {
-        patterns = {"no clip","noclip","phase","walk through","through walls","ghost"},
-        answers = {
-            "No Clip sets CanCollide=false on all your character parts every Stepped frame so you phase through everything.",
-            "Toggle No Clip in Move tab. It loops every physics step and removes collision on all character BaseParts.",
-        }
-    },
-    -- ANDROID / MOBILE
-    {
-        patterns = {"android","mobile","phone","ios","tablet","touch","arceus x","delta executor"},
-        answers = {
-            "All DPM scripts are built for Android. They use touch-friendly large buttons, scrollable menus, draggable GUIs, and on-screen D-pads for fly controls.",
-            "For Android: use Arceus X or Delta executor. DPM menus are touch-optimized with big tap areas, pill toggles, and mobile-safe D-pads.",
-        }
-    },
-    -- UI / DESIGN
-    {
-        patterns = {"ui","design","look","aesthetic","style","black and white","glass","how does it look","theme"},
-        answers = {
-            "DPM uses a glass black-and-white aesthetic — dark transparent frames, white UIStrokes, UIGradients for depth, BlurEffect on the background, and animated pulsing borders.",
-            "The UI has: glass cards with gradient backgrounds, animated top shimmer lines, pill toggles with spring animations, ripple effects on tap, and a sliding tab indicator.",
-        }
-    },
-    -- REMOTES
-    {
-        patterns = {"remote","remotevent","remotefunction","fire server","fireserver","remote spy","how remotes"},
-        answers = {
-            "Use Print Remotes in the Misc tab to log all RemoteEvents and RemoteFunctions to the console. This helps identify which remotes the game uses for actions like hatching or buying.",
-            "DPM auto-scans remotes on load and caches them by keyword (egg, fuse, hatch, grab, etc.). Print Remotes lists everything for manual inspection.",
-        }
-    },
-    -- ERRORS / NOT WORKING
-    {
-        patterns = {"not working","doesnt work","broken","error","crash","failed","wont run","cant inject"},
-        answers = {
-            "Common fixes: 1) Make sure your executor is injected before running. 2) Join a less populated server. 3) Try a different executor. 4) Check if the game updated and patched something.",
-            "If a mod isn't working, run Print Remotes first to see what the game uses. Some games patch remote names — the script might need a manual remote path update.",
-        }
-    },
-    -- LOADSTRING
-    {
-        patterns = {"loadstring","github","how to share","raw link","url","upload"},
-        answers = {
-            "Upload your script to GitHub as a public .lua file, click Raw, copy the URL. Then use: loadstring(game:HttpGet('YOUR_RAW_URL'))()",
-            "1. Create a public GitHub repo. 2. Upload your .lua file. 3. Click Raw button. 4. Copy URL. 5. Use loadstring(game:HttpGet('URL'))() to run it anywhere.",
-        }
-    },
-    -- HOW SCRIPTS ARE MADE
-    {
-        patterns = {"how made","how was it made","how are scripts made","how do you make","how to make a script","scripting","lua","coding","programming"},
-        answers = {
-            "DPM scripts are written in Lua for Roblox executors. They use Roblox's GUI system (Frames, ScrollingFrames, TweenService) for the UI and hook into game internals via __namecall and RemoteEvents.",
-            "DPM Owner writes them in Lua — using RunService for loops, TweenService for animations, and RemoteEvent hooks for game-specific cheats. The glass UI uses UIGradient + UIStroke + BackgroundTransparency.",
-        }
-    },
-    -- PRICE / FREE
-    {
-        patterns = {"price","cost","free","pay","buy","how much","paid"},
-        answers = {
-            "All DPM scripts are free. DPM Owner makes them and shares them freely.",
-            "Free. Every DPM script is free to use — no payment, no subscription.",
-        }
-    },
-    -- HELLO / HI
-    {
-        patterns = {"hello","hi","hey","sup","wassup","what's up","whats up","yo","greetings","good morning","good evening","good night"},
-        answers = {
-            "Hey! I'm DPM-AI. Ask me anything about DPM scripts or Roblox.",
-            "Hey there! DPM-AI ready. What do you need?",
-            "Sup. What can I help you with?",
-        }
-    },
-    -- THANKS
-    {
-        patterns = {"thank","thanks","ty","thx","appreciate","good bot","nice","cool","amazing","great","love it"},
-        answers = {
-            "No problem. DPM Owner made sure I know my stuff.",
-            "Anytime. That's what I'm here for.",
-            "Always. Ask anything else you need.",
-        }
-    },
-    -- ROBLOX GENERAL
-    {
-        patterns = {"what is roblox","roblox","roblox game","how roblox works"},
-        answers = {
-            "Roblox is an online game platform where users create and play games built in Roblox Studio using Lua. DPM scripts run inside Roblox via third-party executors.",
-        }
-    },
-    -- CAPABILITIES
-    {
-        patterns = {"what can you do","what do you know","your capabilities","help me","what can i ask"},
-        answers = {
-            "I can answer questions about: all DPM scripts, who made them, how they work, how to use them, Roblox scripting, executors, specific mods (aimbot, ESP, farm, etc.), and more.",
-            "Ask me about: DPM Premium, DPM Classic, DPM Rivals, Steal An Egg, how mods work, who made the scripts, how to install, specific features — anything DPM or Roblox.",
-        }
-    },
-}
+    if r:find("kill aura") or r:find("killaura") or r:find("aura") then
+        local range = r:match("%d+") or "10"
+        return [[-- Kill Aura by DPM-AI
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LP = Players.LocalPlayer
+local RANGE = ]] .. range .. [[
 
--- fallback pool
-local fallbacks = {
-    "I'm not sure about that specifically. But if it's about DPM scripts — DPM Owner built them all. Ask me something more specific.",
-    "Hmm, that's outside what I know best. Try asking about DPM scripts, specific mods, or Roblox cheats.",
-    "I don't have that info. But I know everything about DPM scripts — try asking about those.",
-    "Not sure on that one. Ask me who made the scripts, how they work, or about specific mods.",
-}
+local enabled = true
 
-local function getAIResponse(input)
-    local lower = input:lower()
-    -- find matching response
-    for _, entry in pairs(responses) do
-        for _, pat in pairs(entry.patterns) do
-            if lower:find(pat) then
-                local ans = entry.answers
-                return ans[math.random(1, #ans)]
+RunService.Heartbeat:Connect(function()
+    if not enabled then return end
+    local char = LP.Character
+    if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    for _, player in pairs(Players:GetPlayers()) do
+        if player ~= LP and player.Character then
+            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+            local hum = player.Character:FindFirstChild("Humanoid")
+            if hrp and hum then
+                local dist = (hrp.Position - root.Position).Magnitude
+                if dist <= RANGE then
+                    hum.Health = 0
+                end
             end
         end
     end
-    -- fallback
-    return fallbacks[math.random(1, #fallbacks)]
+end)
+
+print("Kill Aura loaded — range: " .. RANGE .. " studs")]]
+    end
+
+    -- GOD MODE
+    if r:find("god") or r:find("invincible") or r:find("no die") or r:find("immortal") then
+        return [[-- God Mode by DPM-AI
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LP = Players.LocalPlayer
+
+local enabled = true
+
+RunService.Heartbeat:Connect(function()
+    if not enabled then return end
+    local char = LP.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.Health = hum.MaxHealth
+    end
+end)
+
+-- Prevent fall damage
+LP.CharacterAdded:Connect(function(char)
+    local hum = char:WaitForChild("Humanoid")
+    hum.HealthChanged:Connect(function()
+        if enabled then hum.Health = hum.MaxHealth end
+    end)
+end)
+
+print("God Mode active — you cannot die")]]
+    end
+
+    -- INFINITE JUMP
+    if r:find("infinite jump") or r:find("jump hack") or r:find("jump always") then
+        return [[-- Infinite Jump by DPM-AI
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local LP = Players.LocalPlayer
+
+UserInputService.JumpRequest:Connect(function()
+    local char = LP.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+print("Infinite Jump active")]]
+    end
+
+    -- NO CLIP
+    if r:find("noclip") or r:find("no clip") or r:find("phase") or r:find("walk through") then
+        return [[-- No Clip by DPM-AI
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LP = Players.LocalPlayer
+
+local enabled = true
+
+RunService.Stepped:Connect(function()
+    if not enabled then return end
+    local char = LP.Character
+    if not char then return end
+    for _, part in pairs(char:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = false
+        end
+    end
+end)
+
+print("No Clip active — phasing through walls")]]
+    end
+
+    -- AIMBOT
+    if r:find("aimbot") or r:find("aim bot") or r:find("silent aim") or r:find("aim hack") then
+        return [[-- Aimbot by DPM-AI
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LP = Players.LocalPlayer
+local Cam = workspace.CurrentCamera
+
+local enabled = true
+local FOV = 150
+
+RunService.RenderStepped:Connect(function()
+    if not enabled then return end
+
+    local best, bestDist = nil, FOV
+    local cx = Cam.ViewportSize.X / 2
+    local cy = Cam.ViewportSize.Y / 2
+
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character then
+            local head = p.Character:FindFirstChild("Head")
+            if head then
+                local hum = p.Character:FindFirstChild("Humanoid")
+                if hum and hum.Health > 0 then
+                    local pos, onScreen = Cam:WorldToViewportPoint(head.Position)
+                    if onScreen then
+                        local dist = (Vector2.new(pos.X, pos.Y) - Vector2.new(cx, cy)).Magnitude
+                        if dist < bestDist then
+                            bestDist = dist
+                            best = head
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if best then
+        Cam.CFrame = CFrame.new(Cam.CFrame.Position, best.Position)
+    end
+end)
+
+print("Aimbot active — FOV: " .. FOV)]]
+    end
+
+    -- TELEPORT
+    if r:find("teleport") or r:find("tp script") or r:find("click teleport") then
+        return [[-- Click Teleport by DPM-AI
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local LP = Players.LocalPlayer
+local Cam = workspace.CurrentCamera
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+
+    if input.UserInputType == Enum.UserInputType.MouseButton2 then
+        local char = LP.Character
+        if not char then return end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then return end
+
+        local ray = Cam:ScreenPointToRay(
+            input.Position.X,
+            input.Position.Y
+        )
+        local result = workspace:Raycast(
+            ray.Origin,
+            ray.Direction * 1000,
+            RaycastParams.new()
+        )
+        if result then
+            root.CFrame = CFrame.new(result.Position + Vector3.new(0, 3, 0))
+        end
+    end
+end)
+
+print("Click Teleport active — right-click anywhere to teleport")]]
+    end
+
+    -- AUTO FARM
+    if r:find("auto farm") or r:find("autofarm") or r:find("farming script") then
+        return [[-- Auto Farm by DPM-AI
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local RS = game:GetService("ReplicatedStorage")
+local LP = Players.LocalPlayer
+
+local farmEnabled = true
+local farmDelay = 0.3
+
+-- Find and fire all collect/grab remotes
+local function fireCollectRemotes(target)
+    for _, v in pairs(RS:GetDescendants()) do
+        if v:IsA("RemoteEvent") or v:IsA("RemoteFunction") then
+            local n = v.Name:lower()
+            if n:find("collect") or n:find("grab") or n:find("pickup") or
+               n:find("farm") or n:find("get") then
+                pcall(function()
+                    if v:IsA("RemoteEvent") then
+                        v:FireServer(target)
+                    else
+                        v:InvokeServer(target)
+                    end
+                end)
+            end
+        end
+    end
+end
+
+-- Teleport to collectible objects
+task.spawn(function()
+    while farmEnabled do
+        local char = LP.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+
+        if root then
+            for _, v in pairs(workspace:GetDescendants()) do
+                if not farmEnabled then break end
+                if v:IsA("BasePart") and (
+                    v.Name:lower():find("coin") or
+                    v.Name:lower():find("gem") or
+                    v.Name:lower():find("drop") or
+                    v.Name:lower():find("item") or
+                    v.Name:lower():find("collect")
+                ) then
+                    root.CFrame = CFrame.new(v.Position + Vector3.new(0, 3, 0))
+                    fireCollectRemotes(v)
+                    task.wait(farmDelay)
+                end
+            end
+        end
+        task.wait(1)
+    end
+end)
+
+print("Auto Farm active — collecting all items")]]
+    end
+
+    -- GUI / MENU
+    if r:find("gui") or r:find("menu") or r:find("interface") or r:find("ui") then
+        return [[-- Basic GUI Menu by DPM-AI
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local LP = Players.LocalPlayer
+
+local SG = Instance.new("ScreenGui")
+SG.Name = "DPM_GUI"
+SG.ResetOnSpawn = false
+SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+SG.Parent = game.CoreGui
+
+-- Main Frame
+local main = Instance.new("Frame")
+main.Size = UDim2.new(0, 250, 0, 300)
+main.Position = UDim2.new(0.5, -125, 0.5, -150)
+main.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+main.BorderSizePixel = 0
+main.Parent = SG
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 10)
+
+-- Title
+local title = Instance.new("TextLabel")
+title.Text = "DPM MENU"
+title.Size = UDim2.new(1, 0, 0, 40)
+title.BackgroundColor3 = Color3.fromRGB(25, 25, 35)
+title.BackgroundTransparency = 0
+title.TextColor3 = Color3.new(1, 1, 1)
+title.TextSize = 14
+title.Font = Enum.Font.GothamBold
+title.BorderSizePixel = 0
+title.Parent = main
+Instance.new("UICorner", title).CornerRadius = UDim.new(0, 10)
+
+-- Content
+local content = Instance.new("Frame")
+content.Size = UDim2.new(1, -20, 1, -50)
+content.Position = UDim2.new(0, 10, 0, 45)
+content.BackgroundTransparency = 1
+content.Parent = main
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0, 6)
+layout.Parent = content
+
+-- Button creator
+local function makeToggle(name, callback)
+    local state = false
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, 0, 0, 36)
+    btn.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+    btn.TextColor3 = Color3.fromRGB(180, 180, 200)
+    btn.Text = "[ OFF ]  " .. name
+    btn.TextSize = 12
+    btn.Font = Enum.Font.Gotham
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    btn.BorderSizePixel = 0
+    btn.Parent = content
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+    btn.MouseButton1Click:Connect(function()
+        state = not state
+        if state then
+            btn.Text = "[ ON ]   " .. name
+            btn.TextColor3 = Color3.new(1, 1, 1)
+            btn.BackgroundColor3 = Color3.fromRGB(30, 30, 45)
+        else
+            btn.Text = "[ OFF ]  " .. name
+            btn.TextColor3 = Color3.fromRGB(180, 180, 200)
+            btn.BackgroundColor3 = Color3.fromRGB(22, 22, 32)
+        end
+        callback(state)
+    end)
+end
+
+-- Add your toggles here:
+makeToggle("Speed Hack", function(on)
+    local hum = LP.Character and LP.Character:FindFirstChild("Humanoid")
+    if hum then hum.WalkSpeed = on and 50 or 16 end
+end)
+
+makeToggle("Infinite Jump", function(on)
+    _G.ijOn = on
+end)
+
+makeToggle("God Mode", function(on)
+    _G.godOn = on
+end)
+
+print("GUI Menu loaded")]]
+    end
+
+    -- KEYLOGGER / REMOTE SPY
+    if r:find("remote spy") or r:find("spy remotes") or r:find("log remotes") then
+        return [[-- Remote Spy by DPM-AI
+local RS = game:GetService("ReplicatedStorage")
+
+print("=== DPM Remote Spy ===")
+print("Scanning all remotes...\n")
+
+local count = 0
+for _, v in pairs(game:GetDescendants()) do
+    if v:IsA("RemoteEvent") then
+        print("[EVENT] " .. v:GetFullName())
+        count = count + 1
+    elseif v:IsA("RemoteFunction") then
+        print("[FUNC]  " .. v:GetFullName())
+        count = count + 1
+    end
+end
+
+print("\nTotal remotes found: " .. count)
+
+-- Hook all remotes going forward
+local mt = getrawmetatable(game)
+local old = mt.__namecall
+setreadonly(mt, false)
+
+mt.__namecall = newcclosure(function(self, ...)
+    local args = { ... }
+    local method = getnamecallmethod()
+
+    if method == "FireServer" or method == "InvokeServer" then
+        local info = "[FIRED] " .. tostring(self:GetFullName()) .. " | Args: "
+        for i, v in pairs(args) do
+            info = info .. tostring(v) .. " "
+        end
+        print(info)
+    end
+
+    return old(self, unpack(args))
+end)
+
+setreadonly(mt, true)
+print("Remote spy hook active — check output for fired remotes")]]
+    end
+
+    -- CHAT SPAM
+    if r:find("chat spam") or r:find("spam chat") or r:find("message spam") then
+        return [[-- Chat Spam by DPM-AI
+local messages = {
+    "DPM-AI made this",
+    "L + ratio",
+    "ez game",
+    "DPM Owner 🔥",
+    "skill issue",
+    "no diff",
+}
+
+local spamOn = true
+
+task.spawn(function()
+    while spamOn do
+        local msg = messages[math.random(1, #messages)]
+        pcall(function()
+            game:GetService("ReplicatedStorage")
+                :WaitForChild("DefaultChatSystemChatEvents")
+                :WaitForChild("SayMessageRequest")
+                :FireServer(msg, "All")
+        end)
+        task.wait(2.5)
+    end
+end)
+
+print("Chat Spam active")]]
+    end
+
+    -- ANTI AFK
+    if r:find("anti afk") or r:find("afk bypass") or r:find("no kick") then
+        return [[-- Anti AFK by DPM-AI
+local LP = game:GetService("Players").LocalPlayer
+
+LP.Idled:Connect(function()
+    LP:Move(Vector3.new(0, 0, -1), true)
+    task.wait(0.1)
+    LP:Move(Vector3.new(0, 0, 0), true)
+end)
+
+print("Anti AFK active — you won't be kicked")]]
+    end
+
+    -- FLING
+    if r:find("fling") or r:find("launch players") or r:find("throw players") then
+        return [[-- Fling Others by DPM-AI
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LP = Players.LocalPlayer
+
+local flingOn = true
+
+RunService.Heartbeat:Connect(function()
+    if not flingOn then return end
+    local char = LP.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= LP and p.Character then
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            if hrp and (hrp.Position - root.Position).Magnitude < 20 then
+                local bv = Instance.new("BodyVelocity")
+                bv.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+                bv.Velocity = Vector3.new(
+                    math.random(-100, 100),
+                    100,
+                    math.random(-100, 100)
+                )
+                bv.Parent = hrp
+                game:GetService("Debris"):AddItem(bv, 0.15)
+            end
+        end
+    end
+end)
+
+print("Fling active — launching nearby players")]]
+    end
+
+    -- WALKSPEED GUI WITH SLIDER
+    if r:find("speed gui") or r:find("speed slider") or r:find("speed menu") then
+        return [[-- Speed GUI by DPM-AI
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local LP = Players.LocalPlayer
+
+local SG = Instance.new("ScreenGui")
+SG.Name = "SpeedGUI"; SG.ResetOnSpawn = false
+SG.Parent = game.CoreGui
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 200, 0, 80)
+frame.Position = UDim2.new(0.5, -100, 0, 20)
+frame.BackgroundColor3 = Color3.fromRGB(12, 12, 18)
+frame.BorderSizePixel = 0; frame.Parent = SG
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 8)
+
+local label = Instance.new("TextLabel")
+label.Text = "Speed: 16"
+label.Size = UDim2.new(1, 0, 0, 24)
+label.Position = UDim2.new(0, 0, 0, 4)
+label.BackgroundTransparency = 1
+label.TextColor3 = Color3.new(1,1,1)
+label.TextSize = 12; label.Font = Enum.Font.GothamBold; label.Parent = frame
+
+local track = Instance.new("Frame")
+track.Size = UDim2.new(1, -20, 0, 6)
+track.Position = UDim2.new(0, 10, 0, 36)
+track.BackgroundColor3 = Color3.fromRGB(40, 40, 55)
+track.BorderSizePixel = 0; track.Parent = frame
+Instance.new("UICorner", track).CornerRadius = UDim.new(1, 0)
+
+local fill = Instance.new("Frame")
+fill.Size = UDim2.new(0.1, 0, 1, 0)
+fill.BackgroundColor3 = Color3.new(1,1,1)
+fill.BorderSizePixel = 0; fill.Parent = track
+Instance.new("UICorner", fill).CornerRadius = UDim.new(1, 0)
+
+local thumb = Instance.new("TextButton")
+thumb.Size = UDim2.new(0, 16, 0, 16)
+thumb.Position = UDim2.new(0.1, -8, 0.5, -8)
+thumb.BackgroundColor3 = Color3.new(1,1,1)
+thumb.Text = ""; thumb.BorderSizePixel = 0; thumb.Parent = track
+Instance.new("UICorner", thumb).CornerRadius = UDim.new(1, 0)
+
+local dragging = false
+thumb.MouseButton1Down:Connect(function() dragging = true end)
+UserInputService.InputEnded:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+end)
+
+UserInputService.InputChanged:Connect(function(i)
+    if dragging and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local rel = math.clamp((i.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        fill.Size = UDim2.new(rel, 0, 1, 0)
+        thumb.Position = UDim2.new(rel, -8, 0.5, -8)
+        local speed = math.floor(8 + rel * 192)
+        label.Text = "Speed: " .. speed
+        local hum = LP.Character and LP.Character:FindFirstChild("Humanoid")
+        if hum then hum.WalkSpeed = speed end
+    end
+end)
+
+print("Speed GUI loaded")]]
+    end
+
+    -- GRAVITY
+    if r:find("gravity") or r:find("low gravity") or r:find("moon") then
+        local grav = r:find("zero") and "0" or r:find("moon") and "20" or "40"
+        return [[-- Low Gravity by DPM-AI
+workspace.Gravity = ]] .. grav .. [[
+
+print("Gravity set to ]] .. grav .. [[")]]
+    end
+
+    -- INFINITE STAMINA
+    if r:find("stamina") or r:find("infinite stamina") or r:find("no stamina drain") then
+        return [[-- Infinite Stamina by DPM-AI
+local RS = game:GetService("RunService")
+local LP = game:GetService("Players").LocalPlayer
+
+RS.Heartbeat:Connect(function()
+    local char = LP.Character
+    if not char then return end
+    -- try common stamina value names
+    for _, v in pairs(char:GetDescendants()) do
+        if v:IsA("NumberValue") or v:IsA("IntValue") then
+            local n = v.Name:lower()
+            if n:find("stamina") or n:find("energy") or n:find("endurance") then
+                v.Value = v.MaxValue or 100
+            end
+        end
+    end
+    -- leaderstats
+    local ls = LP:FindFirstChild("leaderstats")
+    if ls then
+        for _, v in pairs(ls:GetChildren()) do
+            if v.Name:lower():find("stamina") or v.Name:lower():find("energy") then
+                v.Value = 9999
+            end
+        end
+    end
+end)
+
+print("Infinite Stamina active")]]
+    end
+
+    -- REACH / HITBOX EXTENDER
+    if r:find("reach") or r:find("hitbox") or r:find("extend") or r:find("big hitbox") then
+        return [[-- Hitbox Extender by DPM-AI
+local Players = game:GetService("Players")
+local LP = Players.LocalPlayer
+
+local REACH = 20  -- studs
+
+local function applyHitbox(char)
+    task.wait(0.5)
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        hrp.Size = Vector3.new(REACH, REACH, REACH)
+        hrp.Transparency = 1
+        hrp.CanCollide = false
+    end
+end
+
+if LP.Character then applyHitbox(LP.Character) end
+LP.CharacterAdded:Connect(applyHitbox)
+
+print("Hitbox extender active — reach: " .. REACH)]]
+    end
+
+    -- WALKSPEED BHOP
+    if r:find("bhop") or r:find("bunny hop") or r:find("bunnyhop") then
+        return [[-- Bunny Hop by DPM-AI
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LP = Players.LocalPlayer
+
+RunService.Heartbeat:Connect(function()
+    local char = LP.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum and hum:GetState() == Enum.HumanoidStateType.Landed then
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+print("Bunny Hop active — hold walk direction to bhop")]]
+    end
+
+    -- DEFAULT — generic helpful script
+    return [[-- Custom Script by DPM-AI
+-- Request: "]] .. request .. [["
+-- 
+-- DPM-AI couldn't find an exact template for this request.
+-- Here's a starter script you can build on:
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local LP = Players.LocalPlayer
+
+-- Character reference
+local function getChar()
+    return LP.Character
+end
+local function getHum()
+    local c = getChar()
+    return c and c:FindFirstChildOfClass("Humanoid")
+end
+local function getRoot()
+    local c = getChar()
+    return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+-- Your logic here:
+RunService.Heartbeat:Connect(function()
+    local hum = getHum()
+    local root = getRoot()
+    if not hum or not root then return end
+
+    -- TODO: add your code here
+
+end)
+
+print("Script loaded")
+-- Tip: Ask DPM-AI more specifically, e.g:
+-- "create a speed hack script"
+-- "make an ESP script"
+-- "write a fly script"]]
+end
+
+-- =============================================
+--  AI KNOWLEDGE BASE
+-- =============================================
+local responses = {
+    {
+        patterns={"who made","who created","who built","who coded","who wrote","creator","author","developed","who is dpm"},
+        answers={"DPM Owner made all of the DPM scripts — every single one.","That's DPM Owner. He's the sole creator and developer.","All DPM scripts were built by DPM Owner.",}
+    },
+    {
+        patterns={"who made you","who built you","who are you","what are you","introduce","your creator"},
+        answers={"I'm DPM-AI, built by DPM Owner. I know DPM scripts, Roblox, and I can write scripts for you.","DPM Owner created me. I'm the AI assistant + code generator for the DPM collection.","I'm DPM-AI — ask me anything or say 'create a [script name]' and I'll write it.",}
+    },
+    {
+        patterns={"what scripts","list scripts","all scripts","what mods","collection","what has dpm made"},
+        answers={"DPM Owner has made: DPM Premium, DPM Classic, DPM Rivals Menu, DPM Steal An Egg, and DPM-AI (me). Say 'create a script' and I'll write one for you.","DPM collection: Premium, Classic, Rivals, Steal An Egg, AI. I can also generate scripts — just ask.",}
+    },
+    {
+        patterns={"create","make","write","generate","build","code"},
+        answers={"__CODEGEN__"}
+    },
+    {
+        patterns={"what can you make","what scripts can you make","what can you generate","script list","script types"},
+        answers={"I can generate: speed hack, fly, ESP, aimbot, kill aura, god mode, infinite jump, no clip, teleport, auto farm, GUI menu, remote spy, chat spam, anti AFK, fling, hitbox extender, bunny hop, gravity hacks, speed GUI, and more. Just say 'create a [name]'.","Generators available: speed, fly, ESP, aimbot, kill aura, god mode, infinite jump, noclip, teleport, auto farm, GUI, remote spy, chat spam, anti AFK, fling, hitbox, bhop, gravity. Say what you want!",}
+    },
+    {
+        patterns={"hello","hi","hey","sup","yo","greetings"},
+        answers={"Hey! I'm DPM-AI. Ask me anything or say 'create a script' and I'll write it for you.","Sup — DPM-AI ready. What script do you need?","Hey there! Ask me a question or say 'create a fly script' (or any mod) and I'll generate it.",}
+    },
+    {
+        patterns={"how to use","how do i use","how to install","how to run","executor","inject","arceus","delta"},
+        answers={"Get Arceus X or Delta for Android. Join a Roblox game, inject, paste the script, execute.","1. Download Arceus X or Delta. 2. Join a game. 3. Inject. 4. Paste + execute the DPM script.",}
+    },
+    {
+        patterns={"thank","thanks","ty","nice","cool","amazing","great"},
+        answers={"No problem. Say 'create a [script]' anytime you need code.","Anytime. Just ask if you need a script written.","Always. What else do you need?",}
+    },
+    {
+        patterns={"how does","explain","what is","tell me about"},
+        answers={"That depends on which script you mean. Be more specific — ask about a specific mod or say 'create a [script name]' and I'll generate it.","Ask me about a specific DPM script or feature, or say 'create a [mod name]' to get working code.",}
+    },
+}
+
+local fallbacks={
+    "Not sure about that. Try asking me to 'create a script' — say something like 'create a speed hack' or 'make a fly script'.",
+    "I don't have that info, but I can write Roblox scripts. Say 'create a [mod name]' and I'll generate it.",
+    "Hmm, try: 'create an ESP script', 'make a fly script', or 'write a god mode script'. I'll generate working code.",
+}
+
+local function isScriptRequest(input)
+    local l=input:lower()
+    local scriptKeywords={"create","make","write","generate","build","give me","can you make","can you write","i want a","i need a"}
+    local modKeywords={"speed","fly","esp","aimbot","kill aura","god mode","noclip","no clip","teleport","farm","gui","menu","jump","fling","bhop","gravity","hitbox","reach","stamina","remote","chat spam","anti afk","aura"}
+    for _,sk in pairs(scriptKeywords) do
+        if l:find(sk) then
+            for _,mk in pairs(modKeywords) do
+                if l:find(mk) then return true end
+            end
+        end
+    end
+    return false
+end
+
+local function getAIResponse(input)
+    if isScriptRequest(input) then
+        return {type="code", content=generateScript(input)}
+    end
+    local lower=input:lower()
+    for _,entry in pairs(responses) do
+        for _,pat in pairs(entry.patterns) do
+            if lower:find(pat) then
+                local ans=entry.answers
+                local picked=ans[math.random(1,#ans)]
+                if picked=="__CODEGEN__" then
+                    return {type="code",content=generateScript(input)}
+                end
+                return {type="text",content=picked}
+            end
+        end
+    end
+    return {type="text",content=fallbacks[math.random(1,#fallbacks)]}
 end
 
 -- =============================================
 --  THEME
 -- =============================================
-local T = {
+local T={
     glass     = Color3.fromRGB(10,10,12),
     glassCard = Color3.fromRGB(20,20,24),
     bar       = Color3.fromRGB(8,8,10),
@@ -331,294 +941,232 @@ local T = {
     dimDark   = Color3.fromRGB(38,38,48),
     sep       = Color3.fromRGB(35,35,44),
     red       = Color3.fromRGB(195,42,42),
-    userBubble= Color3.fromRGB(28,28,36),
-    aiBubble  = Color3.fromRGB(18,18,22),
-    inputBG   = Color3.fromRGB(16,16,20),
+    userBG    = Color3.fromRGB(26,26,36),
+    aiBG      = Color3.fromRGB(16,16,22),
+    codeBG    = Color3.fromRGB(8,8,12),
+    inputBG   = Color3.fromRGB(14,14,18),
+    green     = Color3.fromRGB(80,200,100),
 }
 
 -- =============================================
 --  ROOT GUI
 -- =============================================
-local SG = Instance.new("ScreenGui")
-SG.Name           = "DPMAI"
-SG.ResetOnSpawn   = false
-SG.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-SG.IgnoreGuiInset = true
-SG.Parent         = game.CoreGui
+local SG=Instance.new("ScreenGui")
+SG.Name="DPMAI"; SG.ResetOnSpawn=false
+SG.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+SG.IgnoreGuiInset=true; SG.Parent=game.CoreGui
 
-local blur = Instance.new("BlurEffect")
+local blur=Instance.new("BlurEffect")
 blur.Size=0; blur.Parent=Lighting
 TweenService:Create(blur,TweenInfo.new(0.6),{Size=8}):Play()
 
 -- =============================================
 --  MAIN FRAME
 -- =============================================
-local MF = Instance.new("Frame")
-MF.Name="DPM_AI_Frame"
-MF.Size=UDim2.new(0,320,0,520)
-MF.Position=UDim2.new(0.5,-160,0.5,-260)
-MF.BackgroundColor3=T.glass
-MF.BackgroundTransparency=0.28
-MF.BorderSizePixel=0
-MF.ClipsDescendants=true
-MF.Parent=SG
+local MF=Instance.new("Frame")
+MF.Name="DPM_AI"
+MF.Size=UDim2.new(0,330,0,540)
+MF.Position=UDim2.new(0.5,-165,0.5,-270)
+MF.BackgroundColor3=T.glass; MF.BackgroundTransparency=0.25
+MF.BorderSizePixel=0; MF.ClipsDescendants=true; MF.Parent=SG
 Instance.new("UICorner",MF).CornerRadius=UDim.new(0,18)
 
-local MFGrad=Instance.new("UIGradient")
-MFGrad.Color=ColorSequence.new({
-    ColorSequenceKeypoint.new(0,  Color3.fromRGB(32,32,42)),
+local MFG=Instance.new("UIGradient"); MFG.Color=ColorSequence.new({
+    ColorSequenceKeypoint.new(0,Color3.fromRGB(30,30,40)),
     ColorSequenceKeypoint.new(0.5,Color3.fromRGB(10,10,14)),
-    ColorSequenceKeypoint.new(1,  Color3.fromRGB(6,6,8)),
-})
-MFGrad.Rotation=148; MFGrad.Parent=MF
+    ColorSequenceKeypoint.new(1,Color3.fromRGB(6,6,8)),
+}); MFG.Rotation=148; MFG.Parent=MF
 
-local MFStroke=Instance.new("UIStroke")
-MFStroke.Color=Color3.new(1,1,1); MFStroke.Thickness=1.2
-MFStroke.Transparency=0.6; MFStroke.Parent=MF
+local MFS=Instance.new("UIStroke"); MFS.Color=Color3.new(1,1,1)
+MFS.Thickness=1.2; MFS.Transparency=0.6; MFS.Parent=MF
 
--- border pulse
 task.spawn(function()
     local t=0
     while MF and MF.Parent do
         t=t+task.wait(0.05)
-        MFStroke.Transparency=0.44+math.sin(t*0.85)*0.3
+        MFS.Transparency=0.44+math.sin(t*0.85)*0.3
     end
 end)
 
--- entrance animation
-MF.BackgroundTransparency=1
-MF.Size=UDim2.new(0,320*0.85,0,520*0.85)
+-- entrance
+MF.BackgroundTransparency=1; MF.Size=UDim2.new(0,330*0.85,0,540*0.85)
 TweenService:Create(MF,TweenInfo.new(0.5,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{
-    Size=UDim2.new(0,320,0,520),
-    BackgroundTransparency=0.28,
+    Size=UDim2.new(0,330,0,540),BackgroundTransparency=0.25
 }):Play()
 
 -- top shimmer
-local TopShim=Instance.new("Frame")
-TopShim.Size=UDim2.new(1,0,0,2); TopShim.BackgroundColor3=Color3.new(1,1,1)
-TopShim.BackgroundTransparency=0.35; TopShim.BorderSizePixel=0
-TopShim.ZIndex=10; TopShim.Parent=MF
-local TSG=Instance.new("UIGradient"); TSG.Color=ColorSequence.new({
+local TS2=Instance.new("Frame"); TS2.Size=UDim2.new(1,0,0,2)
+TS2.BackgroundColor3=Color3.new(1,1,1); TS2.BackgroundTransparency=0.35
+TS2.BorderSizePixel=0; TS2.ZIndex=10; TS2.Parent=MF
+local TSG2=Instance.new("UIGradient"); TSG2.Color=ColorSequence.new({
     ColorSequenceKeypoint.new(0,Color3.new(0,0,0)),
     ColorSequenceKeypoint.new(0.25,Color3.new(1,1,1)),
     ColorSequenceKeypoint.new(0.75,Color3.new(1,1,1)),
     ColorSequenceKeypoint.new(1,Color3.new(0,0,0)),
-}); TSG.Parent=TopShim
+}); TSG2.Parent=TS2
 task.spawn(function()
     local t=0
-    while TopShim and TopShim.Parent do
+    while TS2 and TS2.Parent do
         t=t+task.wait(0.04)
-        TopShim.BackgroundTransparency=0.22+math.sin(t*1.4)*0.4
+        TS2.BackgroundTransparency=0.22+math.sin(t*1.4)*0.4
     end
 end)
 
 -- =============================================
 --  TITLE BAR
 -- =============================================
-local TB=Instance.new("Frame")
-TB.Size=UDim2.new(1,0,0,52); TB.Position=UDim2.new(0,0,0,2)
-TB.BackgroundColor3=T.bar; TB.BackgroundTransparency=0.15
-TB.BorderSizePixel=0; TB.ZIndex=6; TB.Parent=MF
+local TB=Instance.new("Frame"); TB.Size=UDim2.new(1,0,0,52)
+TB.Position=UDim2.new(0,0,0,2); TB.BackgroundColor3=T.bar
+TB.BackgroundTransparency=0.12; TB.BorderSizePixel=0; TB.ZIndex=6; TB.Parent=MF
 Instance.new("UICorner",TB).CornerRadius=UDim.new(0,18)
 
-local TBFill=Instance.new("Frame")
-TBFill.Size=UDim2.new(1,0,0,18); TBFill.Position=UDim2.new(0,0,1,-18)
-TBFill.BackgroundColor3=T.bar; TBFill.BackgroundTransparency=0.15
-TBFill.BorderSizePixel=0; TBFill.ZIndex=6; TBFill.Parent=TB
+local TBF=Instance.new("Frame"); TBF.Size=UDim2.new(1,0,0,18)
+TBF.Position=UDim2.new(0,0,1,-18); TBF.BackgroundColor3=T.bar
+TBF.BackgroundTransparency=0.12; TBF.BorderSizePixel=0; TBF.ZIndex=6; TBF.Parent=TB
 
-local TBGrad=Instance.new("UIGradient"); TBGrad.Color=ColorSequence.new({
-    ColorSequenceKeypoint.new(0,Color3.fromRGB(28,28,38)),
-    ColorSequenceKeypoint.new(1,Color3.fromRGB(8,8,12)),
-}); TBGrad.Rotation=90; TBGrad.Parent=TB
+local TBSep2=Instance.new("Frame"); TBSep2.Size=UDim2.new(0.8,0,0,1)
+TBSep2.Position=UDim2.new(0.1,0,1,0); TBSep2.BackgroundColor3=Color3.new(1,1,1)
+TBSep2.BackgroundTransparency=0.82; TBSep2.BorderSizePixel=0; TBSep2.ZIndex=7; TBSep2.Parent=TB
 
-local TBSep=Instance.new("Frame")
-TBSep.Size=UDim2.new(0.8,0,0,1); TBSep.Position=UDim2.new(0.1,0,1,0)
-TBSep.BackgroundColor3=Color3.new(1,1,1); TBSep.BackgroundTransparency=0.8
-TBSep.BorderSizePixel=0; TBSep.ZIndex=7; TBSep.Parent=TB
+-- avatar
+local Av=Instance.new("Frame"); Av.Size=UDim2.new(0,32,0,32)
+Av.Position=UDim2.new(0,12,0.5,-16); Av.BackgroundColor3=Color3.fromRGB(18,18,26)
+Av.BackgroundTransparency=0.1; Av.BorderSizePixel=0; Av.ZIndex=8; Av.Parent=TB
+Instance.new("UICorner",Av).CornerRadius=UDim.new(1,0)
+local AvS=Instance.new("UIStroke"); AvS.Color=Color3.new(1,1,1)
+AvS.Thickness=1; AvS.Transparency=0.5; AvS.Parent=Av
+local AvL=Instance.new("TextLabel"); AvL.Text="AI"; AvL.Size=UDim2.new(1,0,1,0)
+AvL.BackgroundTransparency=1; AvL.TextColor3=Color3.new(1,1,1); AvL.TextSize=11
+AvL.Font=Enum.Font.GothamBold; AvL.ZIndex=9; AvL.Parent=Av
 
--- AI avatar circle
-local Avatar=Instance.new("Frame")
-Avatar.Size=UDim2.new(0,32,0,32); Avatar.Position=UDim2.new(0,12,0.5,-16)
-Avatar.BackgroundColor3=Color3.fromRGB(20,20,26); Avatar.BackgroundTransparency=0.1
-Avatar.BorderSizePixel=0; Avatar.ZIndex=8; Avatar.Parent=TB
-Instance.new("UICorner",Avatar).CornerRadius=UDim.new(1,0)
-local AvStroke=Instance.new("UIStroke"); AvStroke.Color=Color3.new(1,1,1)
-AvStroke.Thickness=1; AvStroke.Transparency=0.5; AvStroke.Parent=Avatar
-local AvLbl=Instance.new("TextLabel"); AvLbl.Text="AI"
-AvLbl.Size=UDim2.new(1,0,1,0); AvLbl.BackgroundTransparency=1
-AvLbl.TextColor3=Color3.new(1,1,1); AvLbl.TextSize=11; AvLbl.Font=Enum.Font.GothamBold
-AvLbl.ZIndex=9; AvLbl.Parent=Avatar
-
--- pulse avatar ring
 task.spawn(function()
     local t=0
-    while Avatar and Avatar.Parent do
+    while Av and Av.Parent do
         t=t+task.wait(0.05)
-        AvStroke.Transparency=0.3+math.abs(math.sin(t*1.6))*0.55
+        AvS.Transparency=0.3+math.abs(math.sin(t*1.6))*0.55
     end
 end)
 
--- title text
-local TitleLbl=Instance.new("TextLabel"); TitleLbl.Text="DPM — AI"
-TitleLbl.Size=UDim2.new(1,-110,0,20); TitleLbl.Position=UDim2.new(0,52,0,7)
-TitleLbl.BackgroundTransparency=1; TitleLbl.TextColor3=T.white; TitleLbl.TextSize=15
-TitleLbl.Font=Enum.Font.GothamBold; TitleLbl.TextXAlignment=Enum.TextXAlignment.Left
-TitleLbl.ZIndex=7; TitleLbl.Parent=TB
-local TGrad=Instance.new("UIGradient"); TGrad.Color=ColorSequence.new({
+local TL=Instance.new("TextLabel"); TL.Text="DPM — AI"
+TL.Size=UDim2.new(1,-110,0,20); TL.Position=UDim2.new(0,52,0,6)
+TL.BackgroundTransparency=1; TL.TextColor3=T.white; TL.TextSize=15
+TL.Font=Enum.Font.GothamBold; TL.TextXAlignment=Enum.TextXAlignment.Left
+TL.ZIndex=7; TL.Parent=TB
+local TLG=Instance.new("UIGradient"); TLG.Color=ColorSequence.new({
     ColorSequenceKeypoint.new(0,Color3.new(1,1,1)),
     ColorSequenceKeypoint.new(1,Color3.fromRGB(155,155,170)),
-}); TGrad.Parent=TitleLbl
+}); TLG.Parent=TL
 
-local SubLbl=Instance.new("TextLabel"); SubLbl.Text="powered by DPM Owner"
-SubLbl.Size=UDim2.new(1,-110,0,13); SubLbl.Position=UDim2.new(0,52,0,28)
-SubLbl.BackgroundTransparency=1; SubLbl.TextColor3=T.dim; SubLbl.TextSize=9
-SubLbl.Font=Enum.Font.Gotham; SubLbl.TextXAlignment=Enum.TextXAlignment.Left
-SubLbl.ZIndex=7; SubLbl.Parent=TB
+local SL=Instance.new("TextLabel"); SL.Text="  Code Generator + AI Assistant"
+SL.Size=UDim2.new(1,-110,0,13); SL.Position=UDim2.new(0,52,0,28)
+SL.BackgroundTransparency=1; SL.TextColor3=T.dim; SL.TextSize=9
+SL.Font=Enum.Font.Gotham; SL.TextXAlignment=Enum.TextXAlignment.Left
+SL.ZIndex=7; SL.Parent=TB
 
--- status dot
-local StatusDot=Instance.new("Frame")
-StatusDot.Size=UDim2.new(0,7,0,7); StatusDot.Position=UDim2.new(0,52,0,29)
-StatusDot.BackgroundColor3=Color3.fromRGB(100,210,100); StatusDot.BackgroundTransparency=0.15
-StatusDot.BorderSizePixel=0; StatusDot.ZIndex=8; StatusDot.Parent=TB
-Instance.new("UICorner",StatusDot).CornerRadius=UDim.new(1,0)
+local SDot=Instance.new("Frame"); SDot.Size=UDim2.new(0,7,0,7)
+SDot.Position=UDim2.new(0,52,0,31); SDot.BackgroundColor3=T.green
+SDot.BackgroundTransparency=0.15; SDot.BorderSizePixel=0; SDot.ZIndex=8; SDot.Parent=TB
+Instance.new("UICorner",SDot).CornerRadius=UDim.new(1,0)
 task.spawn(function()
     local t=0
-    while StatusDot and StatusDot.Parent do
+    while SDot and SDot.Parent do
         t=t+task.wait(0.06)
-        StatusDot.BackgroundTransparency=0.05+math.abs(math.sin(t*1.8))*0.5
+        SDot.BackgroundTransparency=0.05+math.abs(math.sin(t*1.8))*0.5
     end
 end)
-SubLbl.Position=UDim2.new(0,64,0,28) -- offset for dot
 
--- close button
 local CloseBtn=Instance.new("TextButton"); CloseBtn.Text="✕"
 CloseBtn.Size=UDim2.new(0,26,0,26); CloseBtn.Position=UDim2.new(1,-32,0.5,-13)
 CloseBtn.BackgroundColor3=T.red; CloseBtn.BackgroundTransparency=0.15
 CloseBtn.TextColor3=T.white; CloseBtn.TextSize=12; CloseBtn.Font=Enum.Font.GothamBold
 CloseBtn.BorderSizePixel=0; CloseBtn.ZIndex=7; CloseBtn.Parent=TB
 Instance.new("UICorner",CloseBtn).CornerRadius=UDim.new(0,6)
-
 CloseBtn.MouseButton1Click:Connect(function()
     TweenService:Create(MF,TweenInfo.new(0.35,Enum.EasingStyle.Back,Enum.EasingDirection.In),{
-        Size=UDim2.new(0,320,0,0),BackgroundTransparency=1
+        Size=UDim2.new(0,330,0,0),BackgroundTransparency=1
     }):Play()
     TweenService:Create(blur,TweenInfo.new(0.3),{Size=0}):Play()
     task.delay(0.4,function() SG:Destroy() end)
 end)
-CloseBtn.MouseEnter:Connect(function()
-    TweenService:Create(CloseBtn,TweenInfo.new(0.12),{BackgroundTransparency=0}):Play()
-end)
-CloseBtn.MouseLeave:Connect(function()
-    TweenService:Create(CloseBtn,TweenInfo.new(0.12),{BackgroundTransparency=0.15}):Play()
-end)
 
--- minimize
 local MinBtn=Instance.new("TextButton"); MinBtn.Text="─"
 MinBtn.Size=UDim2.new(0,26,0,26); MinBtn.Position=UDim2.new(1,-62,0.5,-13)
 MinBtn.BackgroundColor3=T.dimDark; MinBtn.BackgroundTransparency=0.15
 MinBtn.TextColor3=T.offWhite; MinBtn.TextSize=13; MinBtn.Font=Enum.Font.GothamBold
 MinBtn.BorderSizePixel=0; MinBtn.ZIndex=7; MinBtn.Parent=TB
 Instance.new("UICorner",MinBtn).CornerRadius=UDim.new(0,6)
-local MinS=Instance.new("UIStroke"); MinS.Color=Color3.new(1,1,1); MinS.Thickness=0.7
-MinS.Transparency=0.75; MinS.Parent=MinBtn
 
 local minimized=false
 MinBtn.MouseButton1Click:Connect(function()
     minimized=not minimized
     TweenService:Create(MF,TweenInfo.new(0.28,Enum.EasingStyle.Back,Enum.EasingDirection.Out),{
-        Size=minimized and UDim2.new(0,320,0,54) or UDim2.new(0,320,0,520)
+        Size=minimized and UDim2.new(0,330,0,54) or UDim2.new(0,330,0,540)
     }):Play()
     MinBtn.Text=minimized and "+" or "─"
     TweenService:Create(blur,TweenInfo.new(0.3),{Size=minimized and 0 or 8}):Play()
 end)
 
--- =============================================
---  DRAG
--- =============================================
+-- DRAG
 local drag,dragStart,frameStart=false,nil,nil
 local function startDrag(i)
-    if i.UserInputType==Enum.UserInputType.Touch or
-       i.UserInputType==Enum.UserInputType.MouseButton1 then
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
         drag=true; dragStart=i.Position; frameStart=MF.Position
     end
 end
 local function endDrag(i)
-    if i.UserInputType==Enum.UserInputType.Touch or
-       i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end
+    if i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseButton1 then
+        drag=false
+    end
 end
 TB.InputBegan:Connect(startDrag); TB.InputEnded:Connect(endDrag)
-
--- side strips
-for _,cfg in pairs({{0,0,10,0,0,0},{1,-10,10,0,0,0},{0,0,0,1,-10,10}}) do
+for _,c in pairs({{0,0,10,0,0,0},{1,-10,10,0,0,0},{0,0,0,1,-10,10}}) do
     local s=Instance.new("TextButton"); s.Text=""
-    s.Size=UDim2.new(cfg[3]==0 and 1 or 0,cfg[3],cfg[6]==0 and 1 or 0,cfg[6])
-    s.Position=UDim2.new(cfg[1],cfg[2],cfg[4],cfg[5])
+    s.Size=UDim2.new(c[3]==0 and 1 or 0,c[3],c[6]==0 and 1 or 0,c[6])
+    s.Position=UDim2.new(c[1],c[2],c[4],c[5])
     s.BackgroundTransparency=1; s.BorderSizePixel=0; s.ZIndex=9; s.Parent=MF
     s.InputBegan:Connect(startDrag); s.InputEnded:Connect(endDrag)
 end
-
 UserInputService.InputChanged:Connect(function(i)
-    if drag and (i.UserInputType==Enum.UserInputType.Touch or
-                 i.UserInputType==Enum.UserInputType.MouseMovement) then
+    if drag and (i.UserInputType==Enum.UserInputType.Touch or i.UserInputType==Enum.UserInputType.MouseMovement) then
         local d=i.Position-dragStart
-        MF.Position=UDim2.new(
-            frameStart.X.Scale,frameStart.X.Offset+d.X,
-            frameStart.Y.Scale,frameStart.Y.Offset+d.Y)
+        MF.Position=UDim2.new(frameStart.X.Scale,frameStart.X.Offset+d.X,frameStart.Y.Scale,frameStart.Y.Offset+d.Y)
     end
 end)
 
 -- =============================================
---  CHAT SCROLL AREA
+--  CHAT AREA
 -- =============================================
 local ChatFrame=Instance.new("ScrollingFrame")
-ChatFrame.Name="ChatFrame"
-ChatFrame.Size=UDim2.new(1,0,1,-118)
-ChatFrame.Position=UDim2.new(0,0,0,54)
-ChatFrame.BackgroundTransparency=1
-ChatFrame.BorderSizePixel=0
-ChatFrame.ScrollBarThickness=2
-ChatFrame.ScrollBarImageColor3=Color3.fromRGB(55,55,70)
-ChatFrame.CanvasSize=UDim2.new(0,0,0,0)
-ChatFrame.AutomaticCanvasSize=Enum.AutomaticSize.Y
-ChatFrame.ScrollingDirection=Enum.ScrollingDirection.Y
-ChatFrame.ZIndex=3
-ChatFrame.Parent=MF
+ChatFrame.Size=UDim2.new(1,0,1,-118); ChatFrame.Position=UDim2.new(0,0,0,54)
+ChatFrame.BackgroundTransparency=1; ChatFrame.BorderSizePixel=0
+ChatFrame.ScrollBarThickness=2; ChatFrame.ScrollBarImageColor3=Color3.fromRGB(50,50,65)
+ChatFrame.CanvasSize=UDim2.new(0,0,0,0); ChatFrame.AutomaticCanvasSize=Enum.AutomaticSize.Y
+ChatFrame.ZIndex=3; ChatFrame.Parent=MF
 
-local ChatList=Instance.new("UIListLayout")
-ChatList.Padding=UDim.new(0,8)
-ChatList.SortOrder=Enum.SortOrder.LayoutOrder
-ChatList.HorizontalAlignment=Enum.HorizontalAlignment.Center
-ChatList.Parent=ChatFrame
+local CList=Instance.new("UIListLayout"); CList.Padding=UDim.new(0,8)
+CList.SortOrder=Enum.SortOrder.LayoutOrder
+CList.HorizontalAlignment=Enum.HorizontalAlignment.Center; CList.Parent=ChatFrame
 
-local ChatPad=Instance.new("UIPadding")
-ChatPad.PaddingTop=UDim.new(0,10); ChatPad.PaddingBottom=UDim.new(0,10)
-ChatPad.PaddingLeft=UDim.new(0,8); ChatPad.PaddingRight=UDim.new(0,8)
-ChatPad.Parent=ChatFrame
+local CPad=Instance.new("UIPadding"); CPad.PaddingTop=UDim.new(0,8)
+CPad.PaddingBottom=UDim.new(0,8); CPad.PaddingLeft=UDim.new(0,8)
+CPad.PaddingRight=UDim.new(0,8); CPad.Parent=ChatFrame
 
 -- =============================================
 --  INPUT AREA
 -- =============================================
 local InputArea=Instance.new("Frame")
-InputArea.Size=UDim2.new(1,0,0,64)
-InputArea.Position=UDim2.new(0,0,1,-64)
-InputArea.BackgroundColor3=T.bar; InputArea.BackgroundTransparency=0.1
+InputArea.Size=UDim2.new(1,0,0,64); InputArea.Position=UDim2.new(0,0,1,-64)
+InputArea.BackgroundColor3=T.bar; InputArea.BackgroundTransparency=0.08
 InputArea.BorderSizePixel=0; InputArea.ZIndex=6; InputArea.Parent=MF
 
-local IAGrad=Instance.new("UIGradient"); IAGrad.Color=ColorSequence.new({
-    ColorSequenceKeypoint.new(0,Color3.fromRGB(20,20,28)),
-    ColorSequenceKeypoint.new(1,Color3.fromRGB(8,8,12)),
-}); IAGrad.Rotation=90; IAGrad.Parent=InputArea
+local IASep=Instance.new("Frame"); IASep.Size=UDim2.new(0.9,0,0,1)
+IASep.Position=UDim2.new(0.05,0,0,0); IASep.BackgroundColor3=Color3.new(1,1,1)
+IASep.BackgroundTransparency=0.82; IASep.BorderSizePixel=0; IASep.ZIndex=7; IASep.Parent=InputArea
 
-local IASep=Instance.new("Frame")
-IASep.Size=UDim2.new(0.88,0,0,1); IASep.Position=UDim2.new(0.06,0,0,0)
-IASep.BackgroundColor3=Color3.new(1,1,1); IASep.BackgroundTransparency=0.82
-IASep.BorderSizePixel=0; IASep.ZIndex=7; IASep.Parent=InputArea
-
--- text input box
 local InputBox=Instance.new("TextBox")
-InputBox.Text=""; InputBox.PlaceholderText="Ask DPM-AI anything..."
-InputBox.Size=UDim2.new(1,-58,0,38); InputBox.Position=UDim2.new(0,10,0.5,-19)
-InputBox.BackgroundColor3=T.inputBG; InputBox.BackgroundTransparency=0.15
+InputBox.Text=""; InputBox.PlaceholderText="Ask or say 'create a speed script'..."
+InputBox.Size=UDim2.new(1,-54,0,38); InputBox.Position=UDim2.new(0,8,0.5,-19)
+InputBox.BackgroundColor3=T.inputBG; InputBox.BackgroundTransparency=0.12
 InputBox.TextColor3=T.offWhite; InputBox.PlaceholderColor3=T.dim
 InputBox.TextSize=11; InputBox.Font=Enum.Font.Gotham
 InputBox.TextXAlignment=Enum.TextXAlignment.Left
@@ -627,106 +1175,64 @@ InputBox.BorderSizePixel=0; InputBox.ZIndex=7; InputBox.Parent=InputArea
 Instance.new("UICorner",InputBox).CornerRadius=UDim.new(0,10)
 local IBStroke=Instance.new("UIStroke"); IBStroke.Color=Color3.new(1,1,1)
 IBStroke.Thickness=0.7; IBStroke.Transparency=0.78; IBStroke.Parent=InputBox
-local IBPad=Instance.new("UIPadding")
-IBPad.PaddingLeft=UDim.new(0,10); IBPad.PaddingRight=UDim.new(0,10); IBPad.Parent=InputBox
+local IBP=Instance.new("UIPadding"); IBP.PaddingLeft=UDim.new(0,10); IBP.PaddingRight=UDim.new(0,10); IBP.Parent=InputBox
 
--- send button
-local SendBtn=Instance.new("TextButton"); SendBtn.Text="↑"
-SendBtn.Size=UDim2.new(0,38,0,38); SendBtn.Position=UDim2.new(1,-48,0.5,-19)
-SendBtn.BackgroundColor3=Color3.fromRGB(22,22,30); SendBtn.BackgroundTransparency=0.05
-SendBtn.TextColor3=T.white; SendBtn.TextSize=18; SendBtn.Font=Enum.Font.GothamBold
-SendBtn.BorderSizePixel=0; SendBtn.ZIndex=7; SendBtn.Parent=InputArea
-Instance.new("UICorner",SendBtn).CornerRadius=UDim.new(0,10)
-local SBStroke=Instance.new("UIStroke"); SBStroke.Color=Color3.new(1,1,1)
-SBStroke.Thickness=0.8; SBStroke.Transparency=0.65; SBStroke.Parent=SendBtn
-
-SendBtn.MouseEnter:Connect(function()
-    TweenService:Create(SendBtn,TweenInfo.new(0.12),{BackgroundColor3=Color3.new(1,1,1),TextColor3=Color3.fromRGB(10,10,14)}):Play()
-end)
-SendBtn.MouseLeave:Connect(function()
-    TweenService:Create(SendBtn,TweenInfo.new(0.12),{BackgroundColor3=Color3.fromRGB(22,22,30),TextColor3=T.white}):Play()
-end)
-
--- focus glow on input
 InputBox.Focused:Connect(function()
-    TweenService:Create(IBStroke,TweenInfo.new(0.2),{Transparency=0.45}):Play()
+    TweenService:Create(IBStroke,TweenInfo.new(0.2),{Transparency=0.4}):Play()
 end)
 InputBox.FocusLost:Connect(function()
     TweenService:Create(IBStroke,TweenInfo.new(0.2),{Transparency=0.78}):Play()
 end)
 
--- =============================================
---  CHAT BUBBLE BUILDER
--- =============================================
-local messageCount=0
+local SendBtn=Instance.new("TextButton"); SendBtn.Text="↑"
+SendBtn.Size=UDim2.new(0,36,0,36); SendBtn.Position=UDim2.new(1,-44,0.5,-18)
+SendBtn.BackgroundColor3=Color3.fromRGB(20,20,30); SendBtn.BackgroundTransparency=0.05
+SendBtn.TextColor3=T.white; SendBtn.TextSize=18; SendBtn.Font=Enum.Font.GothamBold
+SendBtn.BorderSizePixel=0; SendBtn.ZIndex=7; SendBtn.Parent=InputArea
+Instance.new("UICorner",SendBtn).CornerRadius=UDim.new(0,10)
+local SBS=Instance.new("UIStroke"); SBS.Color=Color3.new(1,1,1); SBS.Thickness=0.8
+SBS.Transparency=0.65; SBS.Parent=SendBtn
 
-local function scrollToBottom()
-    task.wait(0.05)
+SendBtn.MouseEnter:Connect(function()
+    TweenService:Create(SendBtn,TweenInfo.new(0.12),{BackgroundColor3=Color3.new(1,1,1),TextColor3=Color3.fromRGB(8,8,12)}):Play()
+end)
+SendBtn.MouseLeave:Connect(function()
+    TweenService:Create(SendBtn,TweenInfo.new(0.12),{BackgroundColor3=Color3.fromRGB(20,20,30),TextColor3=T.white}):Play()
+end)
+
+-- =============================================
+--  BUBBLE BUILDER
+-- =============================================
+local msgCount=0
+
+local function scrollBottom()
+    task.wait(0.06)
     ChatFrame.CanvasPosition=Vector2.new(0,ChatFrame.AbsoluteCanvasSize.Y)
 end
 
-local function addBubble(text, isUser)
-    messageCount=messageCount+1
+local function addTextBubble(text, isUser)
+    msgCount=msgCount+1
+    local wrapper=Instance.new("Frame"); wrapper.Size=UDim2.new(1,0,0,0)
+    wrapper.AutomaticSize=Enum.AutomaticSize.Y; wrapper.BackgroundTransparency=1
+    wrapper.BorderSizePixel=0; wrapper.LayoutOrder=msgCount; wrapper.ZIndex=4; wrapper.Parent=ChatFrame
 
-    -- wrapper frame (full width for alignment)
-    local wrapper=Instance.new("Frame")
-    wrapper.Name="Msg"..messageCount
-    wrapper.Size=UDim2.new(1,0,0,0)
-    wrapper.AutomaticSize=Enum.AutomaticSize.Y
-    wrapper.BackgroundTransparency=1
-    wrapper.BorderSizePixel=0
-    wrapper.LayoutOrder=messageCount
-    wrapper.ZIndex=4
-    wrapper.Parent=ChatFrame
-
-    -- label for measuring
-    local measure=Instance.new("TextLabel")
-    measure.Text=text
-    measure.Size=UDim2.new(0,200,0,0)
-    measure.AutomaticSize=Enum.AutomaticSize.XY
-    measure.BackgroundTransparency=1
-    measure.TextColor3=Color3.new(1,1,1)
-    measure.TextSize=11
-    measure.Font=Enum.Font.Gotham
-    measure.TextWrapped=true
-    measure.MaxVisibleGraphemes=0 -- hidden, just for size
-    measure.Parent=SG
-
-    task.wait() -- let size compute
-    local textH = math.max(36, measure.TextBounds.Y + 24)
-    local textW = math.min(measure.TextBounds.X + 24, 210)
-    measure:Destroy()
-
-    -- bubble
-    local bubble=Instance.new("Frame")
-    bubble.Size=UDim2.new(0,textW,0,textH)
-    bubble.AutomaticSize=Enum.AutomaticSize.Y
-    bubble.BackgroundColor3=isUser and T.userBubble or T.aiBubble
-    bubble.BackgroundTransparency=0.15
-    bubble.BorderSizePixel=0
-    bubble.ZIndex=5
-    bubble.Parent=wrapper
+    local maxW=200
+    local bubble=Instance.new("Frame"); bubble.AutomaticSize=Enum.AutomaticSize.Y
+    bubble.Size=UDim2.new(0,maxW,0,0); bubble.BackgroundColor3=isUser and T.userBG or T.aiBG
+    bubble.BackgroundTransparency=0.15; bubble.BorderSizePixel=0; bubble.ZIndex=5; bubble.Parent=wrapper
     Instance.new("UICorner",bubble).CornerRadius=UDim.new(0,12)
 
-    -- position right for user, left for AI
-    if isUser then
-        bubble.Position=UDim2.new(1,-textW-4,0,0)
-        bubble.AnchorPoint=Vector2.new(0,0)
-    else
-        bubble.Position=UDim2.new(0,4,0,0)
-    end
+    if isUser then bubble.Position=UDim2.new(1,-maxW-4,0,0)
+    else bubble.Position=UDim2.new(0,4,0,0) end
 
-    -- bubble gradient
-    local bGrad=Instance.new("UIGradient"); bGrad.Color=ColorSequence.new({
-        ColorSequenceKeypoint.new(0,isUser and Color3.fromRGB(32,32,44) or Color3.fromRGB(22,22,30)),
-        ColorSequenceKeypoint.new(1,isUser and Color3.fromRGB(18,18,26) or Color3.fromRGB(12,12,16)),
-    }); bGrad.Rotation=135; bGrad.Parent=bubble
+    local bG=Instance.new("UIGradient"); bG.Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0,isUser and Color3.fromRGB(30,30,42) or Color3.fromRGB(20,20,28)),
+        ColorSequenceKeypoint.new(1,isUser and Color3.fromRGB(16,16,24) or Color3.fromRGB(10,10,14)),
+    }); bG.Rotation=135; bG.Parent=bubble
 
-    -- bubble stroke
-    local bStroke=Instance.new("UIStroke"); bStroke.Color=Color3.new(1,1,1)
-    bStroke.Thickness=0.7; bStroke.Transparency=isUser and 0.75 or 0.85; bStroke.Parent=bubble
+    local bS=Instance.new("UIStroke"); bS.Color=Color3.new(1,1,1)
+    bS.Thickness=0.7; bS.Transparency=isUser and 0.75 or 0.86; bS.Parent=bubble
 
-    -- top shimmer on AI bubbles
     if not isUser then
         local shim=Instance.new("Frame"); shim.Size=UDim2.new(0.6,0,0,1)
         shim.Position=UDim2.new(0.2,0,0,0); shim.BackgroundColor3=Color3.new(1,1,1)
@@ -734,208 +1240,292 @@ local function addBubble(text, isUser)
         Instance.new("UICorner",shim).CornerRadius=UDim.new(1,0)
     end
 
-    -- sender label
-    local senderLbl=Instance.new("TextLabel")
-    senderLbl.Text=isUser and "You" or "DPM-AI"
-    senderLbl.Size=UDim2.new(1,-10,0,12)
-    senderLbl.Position=UDim2.new(0,8,0,5)
-    senderLbl.BackgroundTransparency=1
-    senderLbl.TextColor3=isUser and T.dim or Color3.fromRGB(140,140,160)
-    senderLbl.TextSize=8; senderLbl.Font=Enum.Font.GothamBold
-    senderLbl.TextXAlignment=Enum.TextXAlignment.Left
-    senderLbl.ZIndex=6; senderLbl.Parent=bubble
+    local sender=Instance.new("TextLabel"); sender.Text=isUser and "You" or "DPM-AI"
+    sender.Size=UDim2.new(1,-10,0,12); sender.Position=UDim2.new(0,8,0,5)
+    sender.BackgroundTransparency=1; sender.TextColor3=isUser and T.dim or Color3.fromRGB(130,130,155)
+    sender.TextSize=8; sender.Font=Enum.Font.GothamBold
+    sender.TextXAlignment=Enum.TextXAlignment.Left; sender.ZIndex=6; sender.Parent=bubble
 
-    -- message label
-    local msgLbl=Instance.new("TextLabel")
-    msgLbl.Text=""
-    msgLbl.Size=UDim2.new(1,-16,0,0)
-    msgLbl.Position=UDim2.new(0,8,0,18)
-    msgLbl.AutomaticSize=Enum.AutomaticSize.Y
-    msgLbl.BackgroundTransparency=1
-    msgLbl.TextColor3=isUser and T.offWhite or Color3.new(1,1,1)
-    msgLbl.TextSize=11; msgLbl.Font=Enum.Font.Gotham
-    msgLbl.TextWrapped=true
-    msgLbl.TextXAlignment=Enum.TextXAlignment.Left
-    msgLbl.ZIndex=6; msgLbl.Parent=bubble
+    local msg=Instance.new("TextLabel"); msg.Text=""
+    msg.Size=UDim2.new(1,-16,0,0); msg.Position=UDim2.new(0,8,0,18)
+    msg.AutomaticSize=Enum.AutomaticSize.Y; msg.BackgroundTransparency=1
+    msg.TextColor3=isUser and T.offWhite or Color3.new(1,1,1)
+    msg.TextSize=11; msg.Font=Enum.Font.Gotham; msg.TextWrapped=true
+    msg.TextXAlignment=Enum.TextXAlignment.Left; msg.ZIndex=6; msg.Parent=bubble
 
-    -- entrance animation
+    local bPad=Instance.new("UIPadding"); bPad.PaddingBottom=UDim.new(0,8); bPad.Parent=bubble
+
     bubble.BackgroundTransparency=1
-    TweenService:Create(bubble,TweenInfo.new(0.25,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{
-        BackgroundTransparency=0.15
-    }):Play()
+    TweenService:Create(bubble,TweenInfo.new(0.22,Enum.EasingStyle.Quad),{BackgroundTransparency=0.15}):Play()
 
-    -- typewriter effect for AI
     if not isUser then
         task.spawn(function()
             for i=1,#text do
-                msgLbl.Text=text:sub(1,i)
-                task.wait(0.018)
+                msg.Text=text:sub(1,i)
+                task.wait(0.014)
             end
-            scrollToBottom()
+            scrollBottom()
         end)
     else
-        msgLbl.Text=text
-        scrollToBottom()
+        msg.Text=text; scrollBottom()
+    end
+end
+
+-- CODE BLOCK BUBBLE
+local function addCodeBubble(code)
+    msgCount=msgCount+1
+    local wrapper=Instance.new("Frame"); wrapper.Size=UDim2.new(1,0,0,0)
+    wrapper.AutomaticSize=Enum.AutomaticSize.Y; wrapper.BackgroundTransparency=1
+    wrapper.BorderSizePixel=0; wrapper.LayoutOrder=msgCount; wrapper.ZIndex=4; wrapper.Parent=ChatFrame
+
+    -- header
+    local header=Instance.new("Frame"); header.Size=UDim2.new(1,-8,0,28)
+    header.Position=UDim2.new(0,4,0,0); header.BackgroundColor3=Color3.fromRGB(20,20,28)
+    header.BackgroundTransparency=0.1; header.BorderSizePixel=0; header.ZIndex=5; header.Parent=wrapper
+    Instance.new("UICorner",header).CornerRadius=UDim.new(0,10)
+
+    local headerG=Instance.new("UIGradient"); headerG.Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0,Color3.fromRGB(28,28,40)),
+        ColorSequenceKeypoint.new(1,Color3.fromRGB(14,14,20)),
+    }); headerG.Rotation=0; headerG.Parent=header
+
+    local hS=Instance.new("UIStroke"); hS.Color=Color3.new(1,1,1)
+    hS.Thickness=0.7; hS.Transparency=0.82; hS.Parent=header
+
+    -- dot indicators (like code editor)
+    for i,col in pairs({Color3.fromRGB(255,90,90),Color3.fromRGB(255,200,50),Color3.fromRGB(80,210,80)}) do
+        local d=Instance.new("Frame"); d.Size=UDim2.new(0,8,0,8)
+        d.Position=UDim2.new(0,6+(i-1)*14,0.5,-4); d.BackgroundColor3=col
+        d.BackgroundTransparency=0.2; d.BorderSizePixel=0; d.ZIndex=6; d.Parent=header
+        Instance.new("UICorner",d).CornerRadius=UDim.new(1,0)
     end
 
-    wrapper.Size=UDim2.new(1,0,0,textH+8)
-    return bubble
+    local fileLbl=Instance.new("TextLabel"); fileLbl.Text="script.lua  —  DPM-AI"
+    fileLbl.Size=UDim2.new(1,-120,1,0); fileLbl.Position=UDim2.new(0,52,0,0)
+    fileLbl.BackgroundTransparency=1; fileLbl.TextColor3=T.dim; fileLbl.TextSize=9
+    fileLbl.Font=Enum.Font.Gotham; fileLbl.TextXAlignment=Enum.TextXAlignment.Left
+    fileLbl.ZIndex=6; fileLbl.Parent=header
+
+    -- copy button
+    local copyBtn=Instance.new("TextButton"); copyBtn.Text="⬡ Copy"
+    copyBtn.Size=UDim2.new(0,62,0,20); copyBtn.Position=UDim2.new(1,-68,0.5,-10)
+    copyBtn.BackgroundColor3=Color3.fromRGB(22,22,32); copyBtn.BackgroundTransparency=0.15
+    copyBtn.TextColor3=T.offWhite; copyBtn.TextSize=9; copyBtn.Font=Enum.Font.GothamBold
+    copyBtn.BorderSizePixel=0; copyBtn.ZIndex=7; copyBtn.Parent=header
+    Instance.new("UICorner",copyBtn).CornerRadius=UDim.new(0,6)
+    local cBS=Instance.new("UIStroke"); cBS.Color=Color3.new(1,1,1)
+    cBS.Thickness=0.6; cBS.Transparency=0.78; cBS.Parent=copyBtn
+
+    copyBtn.MouseButton1Click:Connect(function()
+        setclipboard(code)
+        copyBtn.Text="✓ Copied!"
+        copyBtn.TextColor3=T.green
+        TweenService:Create(copyBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(15,40,20)}):Play()
+        task.delay(1.5,function()
+            copyBtn.Text="⬡ Copy"; copyBtn.TextColor3=T.offWhite
+            TweenService:Create(copyBtn,TweenInfo.new(0.1),{BackgroundColor3=Color3.fromRGB(22,22,32)}):Play()
+        end)
+    end)
+
+    -- code scroll box
+    local codeScroll=Instance.new("ScrollingFrame")
+    codeScroll.Size=UDim2.new(1,-8,0,200); codeScroll.Position=UDim2.new(0,4,0,30)
+    codeScroll.BackgroundColor3=T.codeBG; codeScroll.BackgroundTransparency=0.05
+    codeScroll.BorderSizePixel=0; codeScroll.ScrollBarThickness=3
+    codeScroll.ScrollBarImageColor3=Color3.fromRGB(50,50,65)
+    codeScroll.CanvasSize=UDim2.new(0,0,0,0); codeScroll.AutomaticCanvasSize=Enum.AutomaticSize.XY
+    codeScroll.ZIndex=5; codeScroll.Parent=wrapper
+    Instance.new("UICorner",codeScroll).CornerRadius=UDim.new(0,8)
+
+    local codeGrad=Instance.new("UIGradient"); codeGrad.Color=ColorSequence.new({
+        ColorSequenceKeypoint.new(0,Color3.fromRGB(12,12,18)),
+        ColorSequenceKeypoint.new(1,Color3.fromRGB(6,6,10)),
+    }); codeGrad.Rotation=90; codeGrad.Parent=codeScroll
+
+    local codeSStroke=Instance.new("UIStroke"); codeSStroke.Color=Color3.new(1,1,1)
+    codeSStroke.Thickness=0.7; codeSStroke.Transparency=0.86; codeSStroke.Parent=codeScroll
+
+    local codePad=Instance.new("UIPadding"); codePad.PaddingLeft=UDim.new(0,10)
+    codePad.PaddingTop=UDim.new(0,8); codePad.PaddingBottom=UDim.new(0,8)
+    codePad.PaddingRight=UDim.new(0,8); codePad.Parent=codeScroll
+
+    local codeLbl=Instance.new("TextLabel"); codeLbl.Text=code
+    codeLbl.Size=UDim2.new(0,600,0,0); codeLbl.AutomaticSize=Enum.AutomaticSize.Y
+    codeLbl.BackgroundTransparency=1; codeLbl.TextColor3=Color3.fromRGB(185,185,205)
+    codeLbl.TextSize=10; codeLbl.Font=Enum.Font.Code; codeLbl.TextWrapped=false
+    codeLbl.TextXAlignment=Enum.TextXAlignment.Left
+    codeLbl.TextYAlignment=Enum.TextYAlignment.Top; codeLbl.ZIndex=6; codeLbl.Parent=codeScroll
+
+    -- run in executor button
+    local execBtn=Instance.new("TextButton"); execBtn.Text="▶  Execute Script"
+    execBtn.Size=UDim2.new(1,-8,0,28); execBtn.Position=UDim2.new(0,4,0,232)
+    execBtn.BackgroundColor3=Color3.fromRGB(16,16,24); execBtn.BackgroundTransparency=0.1
+    execBtn.TextColor3=T.green; execBtn.TextSize=11; execBtn.Font=Enum.Font.GothamBold
+    execBtn.BorderSizePixel=0; execBtn.ZIndex=6; execBtn.Parent=wrapper
+    Instance.new("UICorner",execBtn).CornerRadius=UDim.new(0,8)
+    local eS=Instance.new("UIStroke"); eS.Color=T.green; eS.Thickness=0.8
+    eS.Transparency=0.55; eS.Parent=execBtn
+
+    execBtn.MouseButton1Click:Connect(function()
+        TweenService:Create(execBtn,TweenInfo.new(0.12),{
+            BackgroundColor3=Color3.fromRGB(15,40,20),TextColor3=Color3.new(1,1,1)
+        }):Play()
+        execBtn.Text="⏳ Running..."
+        task.spawn(function()
+            local ok,err=pcall(loadstring(code))
+            task.wait(0.5)
+            if ok then
+                execBtn.Text="✓ Script ran successfully"
+                execBtn.TextColor3=T.green
+            else
+                execBtn.Text="✗ Error — check output"
+                execBtn.TextColor3=Color3.fromRGB(220,80,80)
+                print("[DPM-AI Error] "..tostring(err))
+            end
+            task.delay(3,function()
+                execBtn.Text="▶  Execute Script"; execBtn.TextColor3=T.green
+                TweenService:Create(execBtn,TweenInfo.new(0.2),{BackgroundColor3=Color3.fromRGB(16,16,24)}):Play()
+            end)
+        end)
+    end)
+
+    execBtn.MouseEnter:Connect(function()
+        TweenService:Create(execBtn,TweenInfo.new(0.12),{BackgroundColor3=Color3.fromRGB(18,38,18)}):Play()
+    end)
+    execBtn.MouseLeave:Connect(function()
+        TweenService:Create(execBtn,TweenInfo.new(0.12),{BackgroundColor3=Color3.fromRGB(16,16,24)}):Play()
+    end)
+
+    -- wrapper height
+    wrapper.Size=UDim2.new(1,0,0,268)
+    scrollBottom()
 end
 
 -- =============================================
 --  TYPING INDICATOR
 -- =============================================
-local typingWrapper=nil
-local typingBubble=nil
-local typingConn=nil
+local typingW=nil; local typingConn=nil
 
 local function showTyping()
-    typingWrapper=Instance.new("Frame")
-    typingWrapper.Name="Typing"
-    typingWrapper.Size=UDim2.new(1,0,0,44)
-    typingWrapper.BackgroundTransparency=1
-    typingWrapper.BorderSizePixel=0
-    typingWrapper.LayoutOrder=9999
-    typingWrapper.ZIndex=4
-    typingWrapper.Parent=ChatFrame
+    typingW=Instance.new("Frame"); typingW.Size=UDim2.new(1,0,0,40)
+    typingW.BackgroundTransparency=1; typingW.BorderSizePixel=0
+    typingW.LayoutOrder=9999; typingW.ZIndex=4; typingW.Parent=ChatFrame
 
-    typingBubble=Instance.new("Frame")
-    typingBubble.Size=UDim2.new(0,70,0,34)
-    typingBubble.Position=UDim2.new(0,4,0,0)
-    typingBubble.BackgroundColor3=T.aiBubble
-    typingBubble.BackgroundTransparency=0.15
-    typingBubble.BorderSizePixel=0; typingBubble.ZIndex=5; typingBubble.Parent=typingWrapper
-    Instance.new("UICorner",typingBubble).CornerRadius=UDim.new(0,12)
+    local tb=Instance.new("Frame"); tb.Size=UDim2.new(0,70,0,32)
+    tb.Position=UDim2.new(0,4,0,0); tb.BackgroundColor3=T.aiBG
+    tb.BackgroundTransparency=0.15; tb.BorderSizePixel=0; tb.ZIndex=5; tb.Parent=typingW
+    Instance.new("UICorner",tb).CornerRadius=UDim.new(0,12)
 
-    local tGrad=Instance.new("UIGradient"); tGrad.Color=ColorSequence.new({
-        ColorSequenceKeypoint.new(0,Color3.fromRGB(22,22,30)),
-        ColorSequenceKeypoint.new(1,Color3.fromRGB(12,12,16)),
-    }); tGrad.Rotation=135; tGrad.Parent=typingBubble
-
-    -- three dots
-    local dotHolder=Instance.new("Frame"); dotHolder.Size=UDim2.new(1,0,1,0)
-    dotHolder.BackgroundTransparency=1; dotHolder.ZIndex=6; dotHolder.Parent=typingBubble
-    local dLayout=Instance.new("UIListLayout"); dLayout.FillDirection=Enum.FillDirection.Horizontal
-    dLayout.HorizontalAlignment=Enum.HorizontalAlignment.Center
-    dLayout.VerticalAlignment=Enum.VerticalAlignment.Center
-    dLayout.Padding=UDim.new(0,5); dLayout.Parent=dotHolder
+    local dH=Instance.new("Frame"); dH.Size=UDim2.new(1,0,1,0); dH.BackgroundTransparency=1
+    dH.ZIndex=6; dH.Parent=tb
+    local dL2=Instance.new("UIListLayout"); dL2.FillDirection=Enum.FillDirection.Horizontal
+    dL2.HorizontalAlignment=Enum.HorizontalAlignment.Center
+    dL2.VerticalAlignment=Enum.VerticalAlignment.Center
+    dL2.Padding=UDim.new(0,5); dL2.Parent=dH
 
     local dots={}
     for i=1,3 do
         local d=Instance.new("Frame"); d.Size=UDim2.new(0,7,0,7)
         d.BackgroundColor3=T.dim; d.BackgroundTransparency=0.2
-        d.BorderSizePixel=0; d.ZIndex=7; d.Parent=dotHolder
+        d.BorderSizePixel=0; d.ZIndex=7; d.Parent=dH
         Instance.new("UICorner",d).CornerRadius=UDim.new(1,0)
         dots[i]=d
     end
 
-    -- animate dots
     typingConn=RunService.Heartbeat:Connect(function()
         local t=tick()
         for i,d in pairs(dots) do
-            local offset=(i-1)*0.25
-            local v=0.5+math.sin((t+offset)*4)*0.5
-            d.BackgroundColor3=Color3.fromRGB(
-                math.floor(255*v),math.floor(255*v),math.floor(255*v))
-            d.BackgroundTransparency=0.15+math.abs(math.sin((t+offset)*4))*0.5
+            local v=0.5+math.sin((t+(i-1)*0.25)*4)*0.5
+            d.BackgroundColor3=Color3.fromRGB(math.floor(255*v),math.floor(255*v),math.floor(255*v))
         end
     end)
-
-    TweenService:Create(typingBubble,TweenInfo.new(0.2),{BackgroundTransparency=0.15}):Play()
-    scrollToBottom()
+    scrollBottom()
 end
 
 local function hideTyping()
     if typingConn then typingConn:Disconnect(); typingConn=nil end
-    if typingWrapper then typingWrapper:Destroy(); typingWrapper=nil end
-    typingBubble=nil
+    if typingW then typingW:Destroy(); typingW=nil end
 end
 
 -- =============================================
---  QUICK SUGGESTIONS
+--  SUGGESTION PILLS
 -- =============================================
+local SuggestScroll=Instance.new("ScrollingFrame")
+SuggestScroll.Size=UDim2.new(1,0,0,30); SuggestScroll.Position=UDim2.new(0,0,1,-96)
+SuggestScroll.BackgroundTransparency=1; SuggestScroll.BorderSizePixel=0
+SuggestScroll.ScrollBarThickness=0; SuggestScroll.CanvasSize=UDim2.new(0,0,0,0)
+SuggestScroll.AutomaticCanvasSize=Enum.AutomaticSize.X
+SuggestScroll.ScrollingDirection=Enum.ScrollingDirection.X
+SuggestScroll.ZIndex=7; SuggestScroll.Parent=MF
+
+local SuggestList2=Instance.new("UIListLayout"); SuggestList2.FillDirection=Enum.FillDirection.Horizontal
+SuggestList2.VerticalAlignment=Enum.VerticalAlignment.Center
+SuggestList2.Padding=UDim.new(0,5); SuggestList2.Parent=SuggestScroll
+local SP2=Instance.new("UIPadding"); SP2.PaddingLeft=UDim.new(0,8); SP2.PaddingRight=UDim.new(0,8); SP2.Parent=SuggestScroll
+
 local suggestions={
-    "Who made the scripts?",
-    "What is DPM Premium?",
-    "How do I use the scripts?",
-    "What is DPM Steal An Egg?",
-    "How does aimbot work?",
-    "List all DPM scripts",
+    "create a speed hack script",
+    "write a fly script",
+    "make an ESP script",
+    "create an aimbot",
+    "generate a god mode script",
+    "write a no clip script",
+    "create a kill aura",
+    "make a teleport script",
+    "create an auto farm script",
+    "write a GUI menu",
+    "who made the scripts?",
+    "what can you generate?",
 }
 
-local SuggestFrame=Instance.new("ScrollingFrame")
-SuggestFrame.Size=UDim2.new(1,0,0,32)
-SuggestFrame.Position=UDim2.new(0,0,1,-100)
-SuggestFrame.BackgroundTransparency=1; SuggestFrame.BorderSizePixel=0
-SuggestFrame.ScrollBarThickness=0; SuggestFrame.CanvasSize=UDim2.new(0,0,0,0)
-SuggestFrame.AutomaticCanvasSize=Enum.AutomaticSize.X
-SuggestFrame.ScrollingDirection=Enum.ScrollingDirection.X
-SuggestFrame.ZIndex=7; SuggestFrame.Parent=MF
-
-local SuggestList=Instance.new("UIListLayout")
-SuggestList.FillDirection=Enum.FillDirection.Horizontal
-SuggestList.VerticalAlignment=Enum.VerticalAlignment.Center
-SuggestList.Padding=UDim.new(0,5); SuggestList.Parent=SuggestFrame
-local SP=Instance.new("UIPadding"); SP.PaddingLeft=UDim.new(0,8); SP.PaddingRight=UDim.new(0,8); SP.Parent=SuggestFrame
-
 local function sendMessage(text)
-    if text=="" or text:len()<1 then return end
+    if text=="" or #text<1 then return end
     InputBox.Text=""
-    addBubble(text,true)
+    addTextBubble(text,true)
     showTyping()
-    -- simulate think time
-    local thinkTime=0.6+math.random()*0.8
-    task.delay(thinkTime,function()
+    local think=0.5+math.random()*0.9
+    task.delay(think,function()
         hideTyping()
-        local response=getAIResponse(text)
-        addBubble(response,false)
+        local result=getAIResponse(text)
+        if result.type=="code" then
+            addTextBubble("here's the script — tap Copy or Execute:",false)
+            task.delay(0.2,function()
+                addCodeBubble(result.content)
+            end)
+        else
+            addTextBubble(result.content,false)
+        end
     end)
 end
 
 for _,q in pairs(suggestions) do
+    local tw=string.len(q)*6+22
     local pill=Instance.new("TextButton"); pill.Text=q
-    local tw=string.len(q)*6.5+20
-    pill.Size=UDim2.new(0,tw,0,24)
-    pill.BackgroundColor3=Color3.fromRGB(18,18,24); pill.BackgroundTransparency=0.1
-    pill.TextColor3=T.dim; pill.TextSize=9; pill.Font=Enum.Font.Gotham
-    pill.BorderSizePixel=0; pill.ZIndex=8; pill.Parent=SuggestFrame
+    pill.Size=UDim2.new(0,tw,0,22); pill.BackgroundColor3=Color3.fromRGB(16,16,22)
+    pill.BackgroundTransparency=0.1; pill.TextColor3=T.dim; pill.TextSize=9
+    pill.Font=Enum.Font.Gotham; pill.BorderSizePixel=0; pill.ZIndex=8; pill.Parent=SuggestScroll
     Instance.new("UICorner",pill).CornerRadius=UDim.new(1,0)
-    local pS=Instance.new("UIStroke"); pS.Color=Color3.new(1,1,1); pS.Thickness=0.6
-    pS.Transparency=0.82; pS.Parent=pill
-
+    local pS2=Instance.new("UIStroke"); pS2.Color=Color3.new(1,1,1); pS2.Thickness=0.6
+    pS2.Transparency=0.82; pS2.Parent=pill
     pill.MouseEnter:Connect(function()
-        TweenService:Create(pill,TweenInfo.new(0.15),{
-            BackgroundColor3=Color3.fromRGB(28,28,38),TextColor3=T.offWhite
-        }):Play()
-        TweenService:Create(pS,TweenInfo.new(0.15),{Transparency=0.55}):Play()
+        TweenService:Create(pill,TweenInfo.new(0.12),{BackgroundColor3=Color3.fromRGB(26,26,36),TextColor3=T.offWhite}):Play()
+        TweenService:Create(pS2,TweenInfo.new(0.12),{Transparency=0.55}):Play()
     end)
     pill.MouseLeave:Connect(function()
-        TweenService:Create(pill,TweenInfo.new(0.15),{
-            BackgroundColor3=Color3.fromRGB(18,18,24),TextColor3=T.dim
-        }):Play()
-        TweenService:Create(pS,TweenInfo.new(0.15),{Transparency=0.82}):Play()
+        TweenService:Create(pill,TweenInfo.new(0.12),{BackgroundColor3=Color3.fromRGB(16,16,22),TextColor3=T.dim}):Play()
+        TweenService:Create(pS2,TweenInfo.new(0.12),{Transparency=0.82}):Play()
     end)
-    pill.MouseButton1Click:Connect(function()
-        sendMessage(q)
-    end)
+    pill.MouseButton1Click:Connect(function() sendMessage(q) end)
 end
 
--- =============================================
---  SEND LOGIC
--- =============================================
-SendBtn.MouseButton1Click:Connect(function()
-    sendMessage(InputBox.Text)
-end)
-
-InputBox.FocusLost:Connect(function(enter)
-    if enter then sendMessage(InputBox.Text) end
-end)
+SendBtn.MouseButton1Click:Connect(function() sendMessage(InputBox.Text) end)
+InputBox.FocusLost:Connect(function(enter) if enter then sendMessage(InputBox.Text) end end)
 
 -- =============================================
---  WELCOME MESSAGE
+--  WELCOME
 -- =============================================
 task.delay(0.8,function()
-    addBubble("hey! i'm DPM-AI — built by DPM Owner. ask me anything about DPM scripts, mods, or Roblox.",false)
+    addTextBubble("hey! i'm DPM-AI by DPM Owner. ask me anything — or say 'create a fly script' and i'll write and run it for you.",false)
 end)
 
-print("DPM-AI — loaded and ready")
+print("DPM-AI with CodeGen loaded")
