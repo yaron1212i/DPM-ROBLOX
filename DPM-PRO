@@ -1,4 +1,8 @@
--- DPM: client menu, 210 presets plus tools. No external downloads.
+-- DPM v2: live sliders, animated UI, movement/visual tools, 210 presets.
+-- Drag a slider or enter a value; edits apply immediately. RESET restores launch values.
+-- Shift: sprint (enable first). Q: dash. Space/Ctrl: flight altitude.
+-- Settings persist across character respawns; saved positions are session-only.
+-- No external downloads.
 -- Run in a Roblox client Lua environment; in Studio use StarterPlayerScripts.
 -- Not a universal game adapter. Server authority/custom controllers may override effects.
 -- RightShift or floating DPM button: toggle. Drag header. Unload restores saved values.
@@ -16,7 +20,23 @@ if prior then
     if stop then stop:Fire() else prior:Destroy() end
 end
 local connections, rows, highlights, changes = {}, {}, {}, {}
-local flags = {Fly=false, Noclip=false, Outlines=false, AirJump=false}
+local flags = {Fly=false, Noclip=false, Outlines=false, AirJump=false,
+    Sprint=false, Bunnyhop=false, Spin=false, Fullbright=false, NoShadows=false,
+    Nameplates=false, TeamFilter=false, Rainbow=false, HUD=true, Bloom=false,
+    ColorGrade=false, SoftFlight=true}
+local defaults = {}
+for k,v in pairs(flags) do defaults[k]=v end
+local controls, labels, activeTweens = {}, {}, {}
+local waypoints = {}
+local animationTime, baseScale, openAmount = .18, 1, 1
+local settings = {walk=16,fly=55,vertical=45,acceleration=8,jump=50,gravity=196.2,
+    sprint=32,spin=90,dash=80,step=10,hip=2,slope=89,fov=70,zoom=128,
+    cameraHeight=0,brightness=2,clock=12,exposure=0,saturation=0,contrast=0,
+    bloom=1,opacity=.8,hue=.69}
+local liveSettings = {}
+local tintEffect, bloomEffect
+local flightForce, flightAttachment
+local refreshRows = function() end
 local flySpeed, alive, bookmark = 55, true, nil
 local accent = Color3.fromRGB(117, 96, 255)
 local function connect(signal, fn)
@@ -29,6 +49,12 @@ local function make(kind, props, parent)
     for k,v in pairs(props) do x[k] = v end
     x.Parent = parent
     return x
+end
+local function animate(obj, properties, duration)
+    if activeTweens[obj] then activeTweens[obj]:Cancel() end
+    local t=Tween:Create(obj,TweenInfo.new(duration or animationTime,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),properties)
+    activeTweens[obj]=t
+    t:Play()
 end
 local function corner(x) make('UICorner', {CornerRadius=UDim.new(0,9)}, x) end
 local function write(obj, key, value)
@@ -70,12 +96,22 @@ end
 local gui = make('ScreenGui', {Name='DPM_Client', ResetOnSpawn=false, DisplayOrder=90,
     ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, pg)
 local unloadEvent = make('BindableEvent', {Name='Unload'}, gui)
-local panel = make('Frame', {Size=UDim2.fromOffset(560,440), Position=UDim2.new(.5,-280,.5,-220),
+local panel = make('Frame', {Size=UDim2.fromOffset(560,500), Position=UDim2.new(.5,-280,.5,-220),
     BackgroundColor3=Color3.fromRGB(19,20,29), BorderSizePixel=0}, gui)
 corner(panel)
 local scale = make('UIScale', {Scale=1}, panel)
+local stroke=make('UIStroke',{Color=accent,Thickness=1.5,Transparency=.2},panel)
+local ribbon=make('Frame',{Size=UDim2.new(1,-24,0,3),Position=UDim2.fromOffset(12,46),
+    BorderSizePixel=0,BackgroundColor3=Color3.new(1,1,1)},panel)
+local gradient=make('UIGradient',{Color=ColorSequence.new(accent,Color3.fromRGB(47,220,233))},ribbon)
+local liveHUD=make('TextLabel',{Size=UDim2.fromOffset(280,28),Position=UDim2.new(.5,-140,0,4),
+    BackgroundColor3=Color3.fromRGB(19,20,29),BackgroundTransparency=.2,
+    Text='',TextColor3=Color3.new(1,1,1),Font=Enum.Font.Gotham,TextSize=12},gui)
+corner(liveHUD)
+tintEffect=make('ColorCorrectionEffect',{Name='DPM_Color',Enabled=false},Light)
+bloomEffect=make('BloomEffect',{Name='DPM_Bloom',Enabled=false,Size=24,Threshold=1},Light)
 local header = make('TextLabel', {Size=UDim2.new(1,-55,0,48), Position=UDim2.fromOffset(15,0),
-    BackgroundTransparency=1, Text='DPM  /  CLIENT TOOLKIT', Font=Enum.Font.GothamBold,
+    BackgroundTransparency=1, Text='DPM  /  DYNAMIC V2', Font=Enum.Font.GothamBold,
     TextColor3=Color3.new(1,1,1), TextSize=18, TextXAlignment=Enum.TextXAlignment.Left,
     Active=true}, panel)
 local function button(text, parent, size, pos)
@@ -83,6 +119,8 @@ local function button(text, parent, size, pos)
         BackgroundColor3=Color3.fromRGB(37,38,53), TextColor3=Color3.fromRGB(234,235,245),
         BorderSizePixel=0, Font=Enum.Font.Gotham, TextSize=13, AutoButtonColor=true}, parent)
     corner(b)
+    connect(b.MouseEnter,function() animate(b,{BackgroundTransparency=.18}) end)
+    connect(b.MouseLeave,function() animate(b,{BackgroundTransparency=0}) end)
     return b
 end
 local hide = button('-', panel, UDim2.fromOffset(35,30), UDim2.new(1,-45,0,9))
@@ -93,22 +131,23 @@ local search = make('TextBox', {Size=UDim2.new(1,-24,0,34), Position=UDim2.fromO
     PlaceholderText='Search tools or presets...', Text='', ClearTextOnFocus=false,
     Font=Enum.Font.Gotham, TextSize=14, BorderSizePixel=0}, panel)
 corner(search)
-local tabs = make('Frame', {Size=UDim2.new(1,-24,0,32), Position=UDim2.fromOffset(12,92),
-    BackgroundTransparency=1}, panel)
+local tabs = make('ScrollingFrame', {Size=UDim2.new(1,-24,0,32), Position=UDim2.fromOffset(12,92),
+    BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=0,CanvasSize=UDim2.new(),
+    AutomaticCanvasSize=Enum.AutomaticSize.X,ScrollingDirection=Enum.ScrollingDirection.X}, panel)
 make('UIListLayout', {FillDirection=Enum.FillDirection.Horizontal, Padding=UDim.new(0,6)}, tabs)
 local list = make('ScrollingFrame', {Size=UDim2.new(1,-24,1,-170), Position=UDim2.fromOffset(12,133),
     BackgroundTransparency=1, BorderSizePixel=0, ScrollBarThickness=4,
     CanvasSize=UDim2.new(), AutomaticCanvasSize=Enum.AutomaticSize.Y}, panel)
 make('UIListLayout', {Padding=UDim.new(0,6), SortOrder=Enum.SortOrder.LayoutOrder}, list)
 local status = make('TextLabel', {Size=UDim2.new(1,-24,0,26), Position=UDim2.new(0,12,1,-31),
-    BackgroundTransparency=1, Text='Ready | 210 presets + tools | RightShift: toggle',
+    BackgroundTransparency=1, Text='Drag bars or type values | RightShift: menu | Q: dash',
     Font=Enum.Font.Gotham, TextSize=12, TextColor3=Color3.fromRGB(171,175,198),
     TextXAlignment=Enum.TextXAlignment.Left, TextTruncate=Enum.TextTruncate.AtEnd}, panel)
-local selected, tabButtons = 'All', {}
+local selected, tabButtons = 'Controls', {}
 local function filter()
     local q = string.lower(search.Text)
     for _,r in ipairs(rows) do
-        r.button.Visible = (selected=='All' or r.group==selected)
+        r.button.Visible = (selected=='All' or r.group==selected or (selected=='Controls' and r.control))
             and string.find(string.lower(r.name..' '..r.group),q,1,true) ~= nil
     end
     for name,b in pairs(tabButtons) do
@@ -116,9 +155,9 @@ local function filter()
     end
     list.CanvasPosition = Vector2.new()
 end
-for _,name in ipairs({'All','Tools','Movement','Visual','World'}) do
+for _,name in ipairs({'Controls','Tools','Movement','Visual','World','Presets','All'}) do
     local category = name
-    local b = button(category,tabs,UDim2.fromOffset(100,30))
+    local b = button(category,tabs,UDim2.fromOffset(84,30))
     tabButtons[category] = b
     connect(b.Activated,function() selected=category; filter() end)
 end
@@ -130,11 +169,132 @@ local function action(group,name,fn,state)
     table.insert(rows,row)
     connect(b.Activated,function()
         local ok,err = pcall(fn)
+        if not alive then return end
         status.Text = ok and ('Applied: '..name) or ('Unavailable: '..tostring(err))
+        refreshRows()
         if state then b.Text=name..(state() and '  [ON]' or '  [OFF]') end
     end)
-    if state then b.Text=name..'  [OFF]' end
+    if state then b.Text=name..(state() and '  [ON]' or '  [OFF]') end
 end
+-- One shared drag listener, including touch identity and focus-loss cleanup.
+local sliderDrag
+local function quantize(value,low,high,step)
+    value=math.clamp(value,low,high)
+    return math.clamp(low+math.floor((value-low)/step+.5)*step,low,high)
+end
+local function slider(group,id,name,low,high,step,initial,apply)
+    settings[id]=initial
+    local box=make('Frame',{Size=UDim2.new(1,-6,0,80),BackgroundColor3=Color3.fromRGB(29,30,43),
+        BorderSizePixel=0,LayoutOrder=#rows+1},list)
+    corner(box)
+    make('TextLabel',{Text=name,Position=UDim2.fromOffset(12,6),Size=UDim2.new(1,-150,0,27),
+        BackgroundTransparency=1,TextColor3=Color3.fromRGB(235,235,249),Font=Enum.Font.Gotham,
+        TextSize=13,TextXAlignment=Enum.TextXAlignment.Left},box)
+    local valueBox=make('TextBox',{Text='',Position=UDim2.new(1,-117,0,7),Size=UDim2.fromOffset(68,26),
+        BackgroundColor3=Color3.fromRGB(42,44,62),TextColor3=Color3.new(1,1,1),BorderSizePixel=0,
+        Font=Enum.Font.GothamBold,TextSize=13,ClearTextOnFocus=false},box)
+    corner(valueBox)
+    local reset=button('R',box,UDim2.fromOffset(28,26),UDim2.new(1,-39,0,7))
+    local hit=make('TextButton',{Name='SliderTrack',Text='',Size=UDim2.new(1,-32,0,36),
+        Position=UDim2.fromOffset(16,35),BackgroundTransparency=1,AutoButtonColor=false},box)
+    local track=make('Frame',{Size=UDim2.new(1,0,0,6),Position=UDim2.new(0,0,.5,-3),
+        BackgroundColor3=Color3.fromRGB(53,55,76),BorderSizePixel=0},hit)
+    corner(track)
+    local fill=make('Frame',{Size=UDim2.new(0,0,1,0),BackgroundColor3=accent,BorderSizePixel=0},track)
+    corner(fill)
+    local knob=make('Frame',{Size=UDim2.fromOffset(16,16),AnchorPoint=Vector2.new(.5,.5),
+        Position=UDim2.new(0,0,.5,0),BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0},track)
+    corner(knob)
+    local control={initial=initial,id=id,name=name,apply=apply,fill=fill,low=low,high=high,step=step}
+    local function render()
+        local a=math.clamp((settings[id]-low)/(high-low),0,1)
+        valueBox.Text=string.format('%.2f',settings[id]):gsub('0+$',''):gsub('%.$','')
+        animate(fill,{Size=UDim2.new(a,0,1,0)},.07)
+        animate(knob,{Position=UDim2.new(a,0,.5,0)},.07)
+    end
+    function control.set(value,commit,exact)
+        if type(value)~='number' or value~=value or math.abs(value)==math.huge then return false end
+        if not exact then value=quantize(value,low,high,step) end
+        if commit then
+            local ok,err=pcall(apply,value)
+            if not ok then status.Text='Unavailable: '..tostring(err); render(); return false end
+            liveSettings[id]=true
+        end
+        settings[id]=value
+        render()
+        if commit then status.Text=name..': '..valueBox.Text end
+        return true
+    end
+    control.render=render
+    controls[id]=control
+    table.insert(rows,{button=box,group=group,name=name,control=true})
+    local function atX(x)
+        local width=math.max(1,hit.AbsoluteSize.X)
+        control.set(low+(high-low)*math.clamp((x-hit.AbsolutePosition.X)/width,0,1),true)
+    end
+    connect(hit.InputBegan,function(input)
+        if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+            sliderDrag={input=input,move=atX}; list.ScrollingEnabled=false
+            atX(input.Position.X)
+        end
+    end)
+    connect(valueBox.FocusLost,function()
+        if not control.set(tonumber(valueBox.Text),true) then render() end
+    end)
+    connect(reset.Activated,function() control.set(initial,true,true) end)
+    render()
+end
+connect(UIS.InputChanged,function(input)
+    if sliderDrag and (input==sliderDrag.input or
+        (sliderDrag.input.UserInputType==Enum.UserInputType.MouseButton1 and input.UserInputType==Enum.UserInputType.MouseMovement)) then
+        sliderDrag.move(input.Position.X)
+    end
+end)
+local function endSlider() sliderDrag=nil; list.ScrollingEnabled=true end
+connect(UIS.InputEnded,function(input) if sliderDrag and input==sliderDrag.input then endSlider() end end)
+connect(UIS.WindowFocusReleased,endSlider)
+local _,startingHumanoid=body()
+local function initialH(property,fallback) return startingHumanoid and startingHumanoid[property] or fallback end
+slider('Movement','walk','Walk speed',0,250,1,initialH('WalkSpeed',16),function(v) write(humanoid(),'WalkSpeed',v) end)
+slider('Movement','fly','Flight speed',0,300,1,55,function(v) flySpeed=v end)
+slider('Movement','vertical','Flight vertical speed',0,200,1,45,function() end)
+slider('Movement','acceleration','Flight smoothing response',1,30,.5,8,function() end)
+slider('Movement','jump','Jump power',0,250,1,initialH('JumpPower',50),function(v)
+    local h=humanoid(); write(h,'UseJumpPower',true); write(h,'JumpPower',v)
+end)
+slider('World','gravity','Gravity',0,400,.5,workspace.Gravity,function(v) write(workspace,'Gravity',v) end)
+slider('Movement','sprint','Sprint speed',0,300,1,32,function() end)
+slider('Movement','spin','Spin speed (degrees/sec)',-720,720,5,90,function() end)
+slider('Movement','dash','Dash speed',0,300,1,80,function() end)
+slider('Movement','step','Teleport step (studs)',1,100,1,10,function() end)
+slider('Movement','hip','Hip height',0,20,.1,initialH('HipHeight',2),function(v) write(humanoid(),'HipHeight',v) end)
+slider('Movement','slope','Maximum slope angle',0,89,1,initialH('MaxSlopeAngle',89),function(v) write(humanoid(),'MaxSlopeAngle',v) end)
+slider('Visual','fov','Field of view',30,120,1,workspace.CurrentCamera and workspace.CurrentCamera.FieldOfView or 70,
+    function(v) write(workspace.CurrentCamera,'FieldOfView',v) end)
+slider('Visual','zoom','Maximum camera zoom',1,1000,1,me.CameraMaxZoomDistance,function(v)
+    if me.CameraMinZoomDistance>v then write(me,'CameraMinZoomDistance',v) end
+    write(me,'CameraMaxZoomDistance',v)
+end)
+slider('Visual','cameraHeight','Camera height offset',-10,15,.1,0,function(v) write(humanoid(),'CameraOffset',Vector3.new(0,v,0)) end)
+slider('Visual','brightness','Brightness',0,10,.1,Light.Brightness,function(v) write(Light,'Brightness',v) end)
+slider('World','clock','Time of day',0,23.9,.1,Light.ClockTime,function(v) write(Light,'ClockTime',v) end)
+slider('Visual','exposure','Exposure compensation',-3,3,.1,Light.ExposureCompensation,function(v) write(Light,'ExposureCompensation',v) end)
+slider('Visual','saturation','Color saturation',-1,1,.05,0,function(v) tintEffect.Saturation=v; tintEffect.Enabled=true; flags.ColorGrade=true; refreshRows() end)
+slider('Visual','contrast','Color contrast',-1,1,.05,0,function(v) tintEffect.Contrast=v; tintEffect.Enabled=true; flags.ColorGrade=true; refreshRows() end)
+slider('Visual','bloom','Bloom intensity',0,5,.1,1,function(v) bloomEffect.Intensity=v; bloomEffect.Enabled=true; flags.Bloom=true; refreshRows() end)
+slider('Visual','opacity','Outline fill transparency',0,1,.05,.8,function() end)
+slider('Visual','hue','Accent hue',0,1,.01,.69,function() flags.Rainbow=false; refreshRows() end)
+slider('Visual','animation','Menu animation duration',0,.6,.02,.18,function(v) animationTime=v end)
+refreshRows=function()
+    for _,r in ipairs(rows) do
+        if r.state then
+            local enabled=r.state()
+            r.button.Text=r.name..(enabled and '  [ON]' or '  [OFF]')
+            animate(r.button,{BackgroundColor3=enabled and accent or Color3.fromRGB(37,38,53)})
+        end
+    end
+end
+
 local function clearHighlights()
     for _,h in pairs(highlights) do h:Destroy() end
     highlights = {}
@@ -147,15 +307,41 @@ local function restoreCollisions()
     for _,obj in ipairs(targets) do restoreKey(obj,'CanCollide') end
 end
 local function stopFlight()
+    if flightForce then flightForce:Destroy(); flightForce=nil end
+    if flightAttachment then flightAttachment:Destroy(); flightAttachment=nil end
     local _,h,r = body()
-    if h then restoreKey(h,'PlatformStand'); restoreKey(h,'AutoRotate') end
+    if h then restoreKey(h,'PlatformStand'); if not flags.Spin then restoreKey(h,'AutoRotate') end end
     if r then r.AssemblyLinearVelocity=Vector3.new() end
 end
 for _,entry in ipairs({{'Fly','Flight'},{'Noclip','Noclip'},
-    {'Outlines','Player outlines / ESP'},{'AirJump','Air jump'}}) do
+    {'Outlines','Player outlines / ESP'},{'AirJump','Air jump'},
+    {'Sprint','Sprint (hold Shift / mobile toggle)'},{'Bunnyhop','Auto bunnyhop'},
+    {'Spin','Spin character'},{'SoftFlight','Smooth flight acceleration'},
+    {'Fullbright','Fullbright ambient'},{'NoShadows','Disable global shadows'},
+    {'Nameplates','Player names / health / distance'},{'TeamFilter','Hide teammates in overlays'},
+    {'Bloom','Bloom lighting'},{'ColorGrade','Color grading'},
+    {'Rainbow','Animated rainbow accent'},{'HUD','Live speed / FPS HUD'}}) do
     local key,label = entry[1],entry[2]
     action('Tools',label,function()
         flags[key]=not flags[key]
+        local _,h=body()
+        if key=='Spin' and not flags.Spin and not flags.Fly and h then restoreKey(h,'AutoRotate') end
+        if key=='Sprint' and not flags.Sprint and h then
+            if liveSettings.walk then write(h,'WalkSpeed',settings.walk) else restoreKey(h,'WalkSpeed') end
+        end
+        if key=='Fullbright' then
+            if flags.Fullbright then
+                write(Light,'Ambient',Color3.new(1,1,1)); write(Light,'OutdoorAmbient',Color3.new(1,1,1))
+            else restoreKey(Light,'Ambient'); restoreKey(Light,'OutdoorAmbient') end
+        end
+        if key=='NoShadows' then
+            if flags.NoShadows then write(Light,'GlobalShadows',false) else restoreKey(Light,'GlobalShadows') end
+        end
+        if key=='Bloom' then bloomEffect.Enabled=flags.Bloom end
+        if key=='ColorGrade' then tintEffect.Enabled=flags.ColorGrade end
+        if key=='Nameplates' and not flags.Nameplates then
+            for _,label in pairs(labels) do label:Destroy() end; labels={}
+        end
         if key=='Fly' and not flags.Fly then stopFlight() end
         if key=='Noclip' and not flags.Noclip then restoreCollisions() end
         if key=='Outlines' and not flags.Outlines then clearHighlights() end
@@ -165,47 +351,67 @@ action('Tools','Save position',function() bookmark=root().CFrame end)
 action('Tools','Return to saved position',function()
     assert(bookmark,'Save a position first'); root().CFrame=bookmark
 end)
-action('Tools','Teleport 10 studs forward',function()
-    local r=root(); r.CFrame=r.CFrame*CFrame.new(0,0,-10)
+action('Tools','Teleport forward (step slider)',function()
+    local r=root(); r.CFrame=r.CFrame*CFrame.new(0,0,-settings.step)
 end)
-action('Tools','Teleport 10 studs upward',function()
-    local r=root(); r.CFrame=r.CFrame+Vector3.new(0,10,0)
+action('Tools','Teleport upward (step slider)',function()
+    local r=root(); r.CFrame=r.CFrame+Vector3.new(0,settings.step,0)
 end)
+local function dash()
+    local r=root()
+    r.AssemblyLinearVelocity=r.CFrame.LookVector*settings.dash+Vector3.new(0,r.AssemblyLinearVelocity.Y,0)
+end
+action('Movement','Dash forward (Q)',dash)
+action('Movement','Stop momentum',function() local r=root(); r.AssemblyLinearVelocity=Vector3.new(); r.AssemblyAngularVelocity=Vector3.new() end)
+action('Movement','Turn around',function() local r=root(); r.CFrame=r.CFrame*CFrame.Angles(0,math.pi,0) end)
+action('Visual','First-person camera',function() write(me,'CameraMode',Enum.CameraMode.LockFirstPerson) end)
+action('Visual','Third-person camera',function() write(me,'CameraMode',Enum.CameraMode.Classic) end)
+for i=1,5 do
+    local slot=i
+    action('Tools','Save waypoint '..slot,function() waypoints[slot]=root().CFrame end)
+    action('Tools','Go to waypoint '..slot,function()
+        assert(waypoints[slot],'Save this waypoint first'); root().CFrame=waypoints[slot]
+    end)
+end
 action('Tools','Sit',function() humanoid().Sit=true end)
 action('Tools','Stand',function() humanoid().Sit=false end)
 action('Tools','Restore all settings',function()
     for k in pairs(flags) do flags[k]=false end
     stopFlight(); clearHighlights(); restoreAll()
-    flySpeed=55
-    for _,r in ipairs(rows) do if r.state then r.button.Text=r.name..'  [OFF]' end end
+    for _,label in pairs(labels) do label:Destroy() end; labels={}
+    for k,v in pairs(defaults) do flags[k]=v end
+    tintEffect.Enabled=false; tintEffect.Saturation=0; tintEffect.Contrast=0
+    bloomEffect.Enabled=false; bloomEffect.Intensity=1
+    flySpeed=55; animationTime=.18; liveSettings={}
+    for _,control in pairs(controls) do control.set(control.initial,false,true) end
+    refreshRows()
 end)
 -- Seven families x 30 explicit values = 210 selectable presets.
 local families = {
-    {'Movement','Walk speed',function(i) return 8+i*4 end,
-        function(v) write(humanoid(),'WalkSpeed',v) end},
-    {'Movement','Jump power',function(i) return 20+i*4 end,
-        function(v) local h=humanoid(); write(h,'UseJumpPower',true); write(h,'JumpPower',v) end},
-    {'Movement','Flight speed',function(i) return i*5 end,function(v) flySpeed=v end},
-    {'Visual','Field of view',function(i) return 30+i*3 end,
-        function(v) write(workspace.CurrentCamera,'FieldOfView',v) end},
-    {'Visual','Brightness',function(i) return i/10 end,
-        function(v) write(Light,'Brightness',v) end},
-    {'World','Gravity',function(i) return i*10 end,
-        function(v) write(workspace,'Gravity',v) end},
-    {'World','Time of day',function(i) return (i-1)*.8 end,
-        function(v) write(Light,'ClockTime',v) end},
+    {'walk','Walk speed',function(i) return 8+i*4 end},
+    {'jump','Jump power',function(i) return 20+i*4 end},
+    {'fly','Flight speed',function(i) return i*5 end},
+    {'fov','Field of view',function(i) return 30+i*3 end},
+    {'brightness','Brightness',function(i) return i/10 end},
+    {'gravity','Gravity',function(i) return i*10 end},
+    {'clock','Time of day',function(i) return (i-1)*.8 end},
 }
 for _,family in ipairs(families) do
     for i=1,30 do
-        local value,setter = family[3](i),family[4]
-        action(family[1],family[2]..' = '..string.format('%g',value),function() setter(value) end)
+        local id,value=family[1],family[3](i)
+        action('Presets',family[2]..' = '..string.format('%g',value),function()
+            assert(controls[id].set(value,true),'Preset is unavailable')
+        end)
     end
 end
 local function unload()
     if not alive then return end
     alive=false
-    flags.Fly=false
+    flags.Fly=false; flags.Spin=false
     stopFlight(); clearHighlights(); restoreAll()
+    for _,label in pairs(labels) do label:Destroy() end
+    tintEffect:Destroy(); bloomEffect:Destroy()
+    for _,t in pairs(activeTweens) do t:Cancel() end
     for _,c in ipairs(connections) do c:Disconnect() end
     gui:Destroy()
 end
@@ -213,27 +419,27 @@ action('Tools','Unload and restore',unload)
 connect(unloadEvent.Event,unload)
 connect(gui.Destroying,unload)
 -- Touch flight controls; desktop uses Space / LeftControl.
-local vertical = 0
+local heldVertical = {}
 local up = button('UP',gui,UDim2.fromOffset(58,42),UDim2.new(1,-72,.5,-48))
 local down = button('DOWN',gui,UDim2.fromOffset(58,42),UDim2.new(1,-72,.5,0))
 up.Visible=false; down.Visible=false
 for _,pair in ipairs({{up,1},{down,-1}}) do
     local b,dir=pair[1],pair[2]
     connect(b.InputBegan,function(input)
-        if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then vertical=dir end
+        if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then heldVertical[input]=dir end
     end)
 end
 connect(UIS.InputEnded,function(input)
-    if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then vertical=0 end
+    if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then heldVertical[input]=nil end
 end)
-connect(UIS.WindowFocusReleased,function() vertical=0 end)
+connect(UIS.WindowFocusReleased,function() heldVertical={} end)
 connect(UIS.JumpRequest,function()
     local _,h=body()
     if flags.AirJump and h and h.Health>0 and not UIS:GetFocusedTextBox() then
         h:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end)
-connect(Run.PreSimulation,function()
+connect(Run.PreSimulation,function(dt)
     local c,h,r=body()
     up.Visible=flags.Fly; down.Visible=flags.Fly
     if not c or not h or not r or h.Health<=0 then return end
@@ -242,12 +448,34 @@ connect(Run.PreSimulation,function()
             if part:IsA('BasePart') then write(part,'CanCollide',false) end
         end
     end
+    if flags.Sprint then
+        local sprinting=(UIS.TouchEnabled and not UIS.KeyboardEnabled) or
+            (UIS:IsKeyDown(Enum.KeyCode.LeftShift) and not UIS:GetFocusedTextBox())
+        local saved=changes[h] and changes[h].WalkSpeed
+        local base=liveSettings.walk and settings.walk or (saved and saved[1] or h.WalkSpeed)
+        write(h,'WalkSpeed',sprinting and settings.sprint or base)
+    end
+    if flags.Bunnyhop and not flags.Fly and not h.Sit and h.MoveDirection.Magnitude>.05
+        and h.FloorMaterial~=Enum.Material.Air then h.Jump=true end
+    if flags.Spin then
+        write(h,'AutoRotate',false)
+        r.CFrame=r.CFrame*CFrame.Angles(0,math.rad(settings.spin)*dt,0)
+    end
     if flags.Fly then
+        if not flightAttachment or flightAttachment.Parent~=r then
+            if flightForce then flightForce:Destroy() end
+            if flightAttachment then flightAttachment:Destroy() end
+            flightAttachment=make('Attachment',{Name='DPM_FlightAttachment'},r)
+            flightForce=make('VectorForce',{Name='DPM_GravityCompensation',Attachment0=flightAttachment,
+                RelativeTo=Enum.ActuatorRelativeTo.World,ApplyAtCenterOfMass=true},r)
+        end
+        flightForce.Force=Vector3.new(0,r.AssemblyMass*workspace.Gravity,0)
         write(h,'PlatformStand',true); write(h,'AutoRotate',false)
         local camera=workspace.CurrentCamera
         if not camera then return end
         local direction=h.MoveDirection
-        local y=vertical
+        local y=0
+        for _,dir in pairs(heldVertical) do y=y+dir end
         if not UIS:GetFocusedTextBox() then
             if UIS:IsKeyDown(Enum.KeyCode.Space) then y=y+1 end
             if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then y=y-1 end
@@ -256,42 +484,91 @@ connect(Run.PreSimulation,function()
                 local z=(UIS:IsKeyDown(Enum.KeyCode.W) and 1 or 0)-(UIS:IsKeyDown(Enum.KeyCode.S) and 1 or 0)
                 if x~=0 or z~=0 then direction=camera.CFrame.RightVector*x+camera.CFrame.LookVector*z end
             end
-        else direction=Vector3.new() end
-        direction=direction+Vector3.new(0,y,0)
+        else direction=Vector3.new(); y=0 end
         if direction.Magnitude>1 then direction=direction.Unit end
-        r.AssemblyLinearVelocity=direction*flySpeed
+        local target=direction*flySpeed+Vector3.new(0,math.clamp(y,-1,1)*settings.vertical,0)
+        local alpha=flags.SoftFlight and (1-math.exp(-settings.acceleration*dt)) or 1
+        r.AssemblyLinearVelocity=r.AssemblyLinearVelocity:Lerp(target,alpha)
     end
 end)
+local characterGeneration=0
+local function reapplyCharacter(c)
+    characterGeneration=characterGeneration+1
+    local generation=characterGeneration
+    task.spawn(function()
+        local h=c:WaitForChild('Humanoid',10)
+        if not alive or generation~=characterGeneration or not h then return end
+        for _,id in ipairs({'walk','jump','hip','slope','cameraHeight'}) do
+            if liveSettings[id] then controls[id].set(settings[id],true) end
+        end
+    end)
+end
+connect(me.CharacterAdded,reapplyCharacter)
 local elapsed=0
+local frameCount, frameTime, fps=0,0,60
+connect(Run.RenderStepped,function(dt)
+    frameCount=frameCount+1; frameTime=frameTime+dt
+    if frameTime>=.5 then fps=math.floor(frameCount/frameTime+.5); frameCount=0; frameTime=0 end
+end)
 connect(Run.Heartbeat,function(dt)
     elapsed=elapsed+dt
     if elapsed<.35 then return end
     elapsed=0
     -- Drop destroyed instances from the restore cache.
     for obj in pairs(changes) do if not obj.Parent then changes[obj]=nil end end
-    if not flags.Outlines then return end
-    local present={}
+    local hue=flags.Rainbow and ((os.clock()*.08)%1) or settings.hue
+    accent=Color3.fromHSV(hue,.65,1)
+    stroke.Color=accent; opener.BackgroundColor3=accent; list.ScrollBarImageColor3=accent
+    gradient.Color=ColorSequence.new(accent,Color3.fromHSV((hue+.17)%1,.6,1))
+    gradient.Rotation=(os.clock()*35)%360
+    for _,control in pairs(controls) do control.fill.BackgroundColor3=accent end
+    for name,b in pairs(tabButtons) do b.BackgroundColor3=name==selected and accent or Color3.fromRGB(37,38,53) end
+    liveHUD.Visible=flags.HUD
+    local _,_,ownRoot=body()
+    liveHUD.Text=string.format('DPM  |  %d FPS  |  %.1f studs/s',fps,ownRoot and ownRoot.AssemblyLinearVelocity.Magnitude or 0)
+    local present={} 
     for _,p in ipairs(Players:GetPlayers()) do
         local c=p.Character
-        if p~=me and c and c.Parent then
+        if p~=me and c and c.Parent and not (flags.TeamFilter and me.Team~=nil and p.Team==me.Team) then
             present[p]=true
             if highlights[p] and highlights[p].Adornee~=c then highlights[p]:Destroy(); highlights[p]=nil end
-            if not highlights[p] then
+            if flags.Outlines and not highlights[p] then
                 highlights[p]=make('Highlight',{Adornee=c,FillTransparency=.8,
                     OutlineTransparency=0,DepthMode=Enum.HighlightDepthMode.AlwaysOnTop},gui)
             end
             local color=p.TeamColor.Color
-            highlights[p].FillColor=color; highlights[p].OutlineColor=color
+            if highlights[p] then
+                highlights[p].Enabled=flags.Outlines
+                highlights[p].FillColor=color; highlights[p].OutlineColor=color
+                highlights[p].FillTransparency=settings.opacity
+            end
+            local head=c:FindFirstChild('Head')
+            if labels[p] and labels[p].Adornee~=head then labels[p]:Destroy(); labels[p]=nil end
+            if flags.Nameplates and head then
+                if not labels[p] then
+                    labels[p]=make('BillboardGui',{Adornee=head,Size=UDim2.fromOffset(210,42),
+                        StudsOffset=Vector3.new(0,2.8,0),AlwaysOnTop=true,MaxDistance=1500},gui)
+                    make('TextLabel',{Name='Info',Size=UDim2.fromScale(1,1),BackgroundTransparency=1,
+                        TextColor3=color,TextStrokeTransparency=.3,Font=Enum.Font.GothamBold,TextSize=12},labels[p])
+                end
+                local ph=c:FindFirstChildOfClass('Humanoid')
+                local distance=ownRoot and (head.Position-ownRoot.Position).Magnitude or 0
+                labels[p].Info.Text=string.format('%s\nHP %.0f / %.0f | %.0f studs',p.DisplayName,
+                    ph and ph.Health or 0,ph and ph.MaxHealth or 0,distance)
+                labels[p].Info.TextColor3=color
+            end
         end
     end
     for p,h in pairs(highlights) do if not present[p] then h:Destroy(); highlights[p]=nil end end
+    for p,l in pairs(labels) do if not present[p] or not flags.Nameplates then l:Destroy(); labels[p]=nil end end
 end)
 local function fit()
     local camera=workspace.CurrentCamera
     if not camera then return end
     local v=camera.ViewportSize
-    scale.Scale=math.min(1,(v.X-24)/560,(v.Y-70)/440)
-    panel.Position=UDim2.fromOffset(math.max(0,(v.X-560*scale.Scale)/2),math.max(0,(v.Y-440*scale.Scale)/2-20))
+    baseScale=math.max(.2,math.min(1,(v.X-24)/560,(v.Y-70)/500))
+    scale.Scale=baseScale*openAmount
+    panel.Position=UDim2.fromOffset(math.max(0,(v.X-560*scale.Scale)/2),math.max(0,(v.Y-500*scale.Scale)/2-20))
 end
 local cameraConnection
 local function bindCamera()
@@ -299,6 +576,7 @@ local function bindCamera()
     local camera=workspace.CurrentCamera
     if camera then cameraConnection=connect(camera:GetPropertyChangedSignal('ViewportSize'),fit) end
     fit()
+    if liveSettings.fov and camera then controls.fov.set(settings.fov,true) end
 end
 connect(workspace:GetPropertyChangedSignal('CurrentCamera'),bindCamera)
 bindCamera()
@@ -309,8 +587,9 @@ connect(header.InputBegan,function(input)
     end
 end)
 connect(UIS.InputEnded,function(input) if input==dragInput then dragging=false end end)
+connect(UIS.WindowFocusReleased,function() dragging=false end)
 connect(UIS.InputChanged,function(input)
-    if not dragging then return end
+    if not dragging or sliderDrag then return end
     if input~=dragInput and input.UserInputType~=Enum.UserInputType.MouseMovement then return end
     local d=input.Position-origin
     local camera=workspace.CurrentCamera
@@ -319,17 +598,27 @@ connect(UIS.InputChanged,function(input)
     panel.Position=UDim2.fromOffset(math.clamp(start.X.Offset+d.X,0,math.max(0,v.X-560*scale.Scale)),
         math.clamp(start.Y.Offset+d.Y,0,math.max(0,v.Y-48*scale.Scale-40)))
 end)
+local menuOpen=true
+local transition=0
 local function togglePanel()
-    panel.Visible=not panel.Visible
-    if panel.Visible then
-        local target=scale.Scale
-        scale.Scale=target*.94
-        Tween:Create(scale,TweenInfo.new(.16,Enum.EasingStyle.Quad),{Scale=target}):Play()
+    menuOpen=not menuOpen; transition=transition+1
+    local token=transition
+    if menuOpen then
+        panel.Visible=true; openAmount=1
+        animate(scale,{Scale=baseScale},animationTime)
+    else
+        endSlider(); dragging=false
+        openAmount=.92
+        animate(scale,{Scale=baseScale*.92},animationTime)
+        task.delay(animationTime,function() if alive and token==transition then panel.Visible=false end end)
     end
 end
 connect(hide.Activated,togglePanel)
 connect(opener.Activated,togglePanel)
 connect(UIS.InputBegan,function(input,processed)
-    if not processed and input.KeyCode==Enum.KeyCode.RightShift then togglePanel() end
+    if processed or UIS:GetFocusedTextBox() then return end
+    if input.KeyCode==Enum.KeyCode.RightShift then togglePanel() end
+    if input.KeyCode==Enum.KeyCode.Q then local ok,err=pcall(dash); if not ok then status.Text=tostring(err) end end
 end)
+refreshRows()
 filter()
