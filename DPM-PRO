@@ -1,4 +1,6 @@
--- DPM v2: live sliders, animated UI, movement/visual tools, 210 presets.
+-- DPM v3: draggable animated launcher, 510 numeric presets, live sliders, and tools.
+-- Presets are parameter values, not 510 distinct game-specific cheats.
+-- Launcher: tap to open/close; drag to reposition; release to snap to an edge.
 -- Drag a slider or enter a value; edits apply immediately. RESET restores launch values.
 -- Shift: sprint (enable first). Q: dash. Space/Ctrl: flight altitude.
 -- Settings persist across character respawns; saved positions are session-only.
@@ -23,7 +25,9 @@ local connections, rows, highlights, changes = {}, {}, {}, {}
 local flags = {Fly=false, Noclip=false, Outlines=false, AirJump=false,
     Sprint=false, Bunnyhop=false, Spin=false, Fullbright=false, NoShadows=false,
     Nameplates=false, TeamFilter=false, Rainbow=false, HUD=true, Bloom=false,
-    ColorGrade=false, SoftFlight=true}
+    ColorGrade=false, SoftFlight=true,Trail=false,Headlamp=false,DayCycle=false,
+    NoFog=false,HideSelf=false,Crosshair=false,Blur=false,SunRays=false,
+    AliveOnly=false,LauncherPulse=true}
 local defaults = {}
 for k,v in pairs(flags) do defaults[k]=v end
 local controls, labels, activeTweens = {}, {}, {}
@@ -34,7 +38,11 @@ local settings = {walk=16,fly=55,vertical=45,acceleration=8,jump=50,gravity=196.
     cameraHeight=0,brightness=2,clock=12,exposure=0,saturation=0,contrast=0,
     bloom=1,opacity=.8,hue=.69}
 local liveSettings = {}
-local tintEffect, bloomEffect
+local tintEffect, bloomEffect, blurEffect, sunEffect
+local trail, trailLeft, trailRight, headlamp
+local menuOpen=true
+local launcherDrag, launcherMoved, launcherHover, launcherPress = nil,false,false,false
+local snapLauncher = function() end
 local flightForce, flightAttachment
 local refreshRows = function() end
 local flySpeed, alive, bookmark = 55, true, nil
@@ -111,21 +119,44 @@ corner(liveHUD)
 tintEffect=make('ColorCorrectionEffect',{Name='DPM_Color',Enabled=false},Light)
 bloomEffect=make('BloomEffect',{Name='DPM_Bloom',Enabled=false,Size=24,Threshold=1},Light)
 local header = make('TextLabel', {Size=UDim2.new(1,-55,0,48), Position=UDim2.fromOffset(15,0),
-    BackgroundTransparency=1, Text='DPM  /  DYNAMIC V2', Font=Enum.Font.GothamBold,
+    BackgroundTransparency=1, Text='DPM  /  DYNAMIC V3', Font=Enum.Font.GothamBold,
     TextColor3=Color3.new(1,1,1), TextSize=18, TextXAlignment=Enum.TextXAlignment.Left,
     Active=true}, panel)
-local function button(text, parent, size, pos)
+local function button(text, parent, size, pos, noHover)
     local b = make('TextButton', {Text=text, Size=size, Position=pos or UDim2.new(),
         BackgroundColor3=Color3.fromRGB(37,38,53), TextColor3=Color3.fromRGB(234,235,245),
         BorderSizePixel=0, Font=Enum.Font.Gotham, TextSize=13, AutoButtonColor=true}, parent)
     corner(b)
-    connect(b.MouseEnter,function() animate(b,{BackgroundTransparency=.18}) end)
-    connect(b.MouseLeave,function() animate(b,{BackgroundTransparency=0}) end)
+    if not noHover then
+        connect(b.MouseEnter,function() animate(b,{BackgroundTransparency=.18}) end)
+        connect(b.MouseLeave,function() animate(b,{BackgroundTransparency=0}) end)
+    end
     return b
 end
 local hide = button('-', panel, UDim2.fromOffset(35,30), UDim2.new(1,-45,0,9))
-local opener = button('DPM', gui, UDim2.fromOffset(58,42), UDim2.new(0,12,.5,-21))
-opener.BackgroundColor3 = accent
+local launcherBounds=make('Frame',{Name='LauncherBounds',Size=UDim2.fromScale(1,1),
+    BackgroundTransparency=1,Active=false,ZIndex=20},gui)
+local opener = button('DPM', launcherBounds, UDim2.fromOffset(68,58), UDim2.new(0,14,.5,-29),true)
+opener.Name='DPM_Launcher'; opener.ZIndex=21; opener.AutoButtonColor=false
+opener.BackgroundColor3=Color3.fromRGB(25,27,43); opener.Text=''
+local launcherScale=make('UIScale',{Scale=1},opener)
+local launcherStroke=make('UIStroke',{Color=accent,Thickness=2,Transparency=.1},opener)
+local launcherGradient=make('UIGradient',{Color=ColorSequence.new(Color3.fromRGB(74,66,120),Color3.fromRGB(24,27,44)),Rotation=25},opener)
+local launcherTitle=make('TextLabel',{Text='DPM',Size=UDim2.new(1,0,0,30),Position=UDim2.fromOffset(0,4),
+    BackgroundTransparency=1,TextColor3=Color3.new(1,1,1),Font=Enum.Font.GothamBold,TextSize=18,ZIndex=22},opener)
+local launcherState=make('TextLabel',{Text='CLOSE',Size=UDim2.new(1,0,0,16),Position=UDim2.fromOffset(0,34),
+    BackgroundTransparency=1,TextColor3=accent,Font=Enum.Font.GothamBold,TextSize=9,ZIndex=22},opener)
+local launcherDot=make('Frame',{Size=UDim2.fromOffset(6,6),Position=UDim2.new(1,-11,0,6),
+    BackgroundColor3=Color3.fromRGB(96,244,170),BorderSizePixel=0,ZIndex=22},opener)
+corner(launcherDot)
+local crosshair=make('Frame',{Size=UDim2.fromOffset(28,28),AnchorPoint=Vector2.new(.5,.5),
+    Position=UDim2.fromScale(.5,.5),BackgroundTransparency=1,Visible=false},gui)
+for _,segment in ipairs({{12,0,3,9},{12,19,3,9},{0,12,9,3},{19,12,9,3}}) do
+    make('Frame',{Position=UDim2.fromOffset(segment[1],segment[2]),Size=UDim2.fromOffset(segment[3],segment[4]),
+        BackgroundColor3=Color3.new(1,1,1),BorderSizePixel=0},crosshair)
+end
+blurEffect=make('BlurEffect',{Name='DPM_Blur',Size=8,Enabled=false},Light)
+sunEffect=make('SunRaysEffect',{Name='DPM_Sun',Intensity=.1,Spread=.5,Enabled=false},Light)
 local search = make('TextBox', {Size=UDim2.new(1,-24,0,34), Position=UDim2.fromOffset(12,50),
     BackgroundColor3=Color3.fromRGB(30,31,43), TextColor3=Color3.new(1,1,1),
     PlaceholderText='Search tools or presets...', Text='', ClearTextOnFocus=false,
@@ -155,7 +186,7 @@ local function filter()
     end
     list.CanvasPosition = Vector2.new()
 end
-for _,name in ipairs({'Controls','Tools','Movement','Visual','World','Presets','All'}) do
+for _,name in ipairs({'Controls','Tools','Movement','Visual','World','Launcher','Presets','All'}) do
     local category = name
     local b = button(category,tabs,UDim2.fromOffset(84,30))
     tabButtons[category] = b
@@ -285,6 +316,12 @@ slider('Visual','bloom','Bloom intensity',0,5,.1,1,function(v) bloomEffect.Inten
 slider('Visual','opacity','Outline fill transparency',0,1,.05,.8,function() end)
 slider('Visual','hue','Accent hue',0,1,.01,.69,function() flags.Rainbow=false; refreshRows() end)
 slider('Visual','animation','Menu animation duration',0,.6,.02,.18,function(v) animationTime=v end)
+slider('World','dayRate','Day cycle (hours/minute)',0,24,.1,1,function() end)
+slider('Visual','trailLife','Trail lifetime (seconds)',.1,5,.1,1,function() end)
+slider('Visual','lampPower','Headlamp brightness',0,10,.1,3,function() end)
+slider('Visual','blur','Screen blur amount',0,30,.5,8,function(v) blurEffect.Size=v end)
+slider('Launcher','pulseRate','Launcher pulse speed',.2,4,.1,1.2,function() end)
+slider('Launcher','pulseSize','Launcher pulse strength',0,.15,.01,.04,function() end)
 refreshRows=function()
     for _,r in ipairs(rows) do
         if r.state then
@@ -313,6 +350,22 @@ local function stopFlight()
     if h then restoreKey(h,'PlatformStand'); if not flags.Spin then restoreKey(h,'AutoRotate') end end
     if r then r.AssemblyLinearVelocity=Vector3.new() end
 end
+local function clearTrail()
+    for _,x in ipairs({trail or false,trailLeft or false,trailRight or false}) do if x then x:Destroy() end end
+    trail=nil; trailLeft=nil; trailRight=nil
+end
+local function clearLamp() if headlamp then headlamp:Destroy(); headlamp=nil end end
+local function restorePropertyEverywhere(key)
+    local objects={}
+    for obj,props in pairs(changes) do if props[key] then objects[#objects+1]=obj end end
+    for _,obj in ipairs(objects) do restoreKey(obj,key) end
+end
+local function applyFogRemoval()
+    write(Light,'FogEnd',1000000); write(Light,'FogStart',999999)
+    for _,a in ipairs(Light:GetChildren()) do
+        if a:IsA('Atmosphere') then write(a,'Density',0); write(a,'Haze',0) end
+    end
+end
 for _,entry in ipairs({{'Fly','Flight'},{'Noclip','Noclip'},
     {'Outlines','Player outlines / ESP'},{'AirJump','Air jump'},
     {'Sprint','Sprint (hold Shift / mobile toggle)'},{'Bunnyhop','Auto bunnyhop'},
@@ -320,11 +373,31 @@ for _,entry in ipairs({{'Fly','Flight'},{'Noclip','Noclip'},
     {'Fullbright','Fullbright ambient'},{'NoShadows','Disable global shadows'},
     {'Nameplates','Player names / health / distance'},{'TeamFilter','Hide teammates in overlays'},
     {'Bloom','Bloom lighting'},{'ColorGrade','Color grading'},
-    {'Rainbow','Animated rainbow accent'},{'HUD','Live speed / FPS HUD'}}) do
+    {'Rainbow','Animated rainbow accent'},{'HUD','Live speed / FPS HUD'},
+    {'Trail','Rainbow movement trail (local)'},{'Headlamp','Character headlamp (local)'},
+    {'DayCycle','Animated day / night cycle'},{'NoFog','Remove fog and atmosphere'},
+    {'HideSelf','Hide own avatar (local)'},{'Crosshair','Center crosshair'},
+    {'Blur','Cinematic screen blur'},{'SunRays','Sun rays effect'},
+    {'AliveOnly','Hide dead players in overlays'},{'LauncherPulse','Pulsing launcher glow'}}) do
     local key,label = entry[1],entry[2]
     action('Tools',label,function()
         flags[key]=not flags[key]
         local _,h=body()
+        if key=='Trail' and not flags.Trail then clearTrail() end
+        if key=='Headlamp' and not flags.Headlamp then clearLamp() end
+        if key=='DayCycle' and not flags.DayCycle then
+            if liveSettings.clock then write(Light,'ClockTime',settings.clock) else restoreKey(Light,'ClockTime') end
+        end
+        if key=='NoFog' then
+            if flags.NoFog then applyFogRemoval() else
+                restoreKey(Light,'FogStart'); restoreKey(Light,'FogEnd')
+                restorePropertyEverywhere('Density'); restorePropertyEverywhere('Haze')
+            end
+        end
+        if key=='HideSelf' and not flags.HideSelf then restorePropertyEverywhere('LocalTransparencyModifier') end
+        if key=='Crosshair' then crosshair.Visible=flags.Crosshair end
+        if key=='Blur' then blurEffect.Enabled=flags.Blur end
+        if key=='SunRays' then sunEffect.Enabled=flags.SunRays end
         if key=='Spin' and not flags.Spin and not flags.Fly and h then restoreKey(h,'AutoRotate') end
         if key=='Sprint' and not flags.Sprint and h then
             if liveSettings.walk then write(h,'WalkSpeed',settings.walk) else restoreKey(h,'WalkSpeed') end
@@ -373,12 +446,21 @@ for i=1,5 do
         assert(waypoints[slot],'Save this waypoint first'); root().CFrame=waypoints[slot]
     end)
 end
+action('Launcher','Snap launcher to nearest edge',function() snapLauncher(true) end)
+action('Launcher','Reset launcher position',function()
+    opener.Position=UDim2.new(0,14,.5,-29); snapLauncher(false)
+end)
+for _,preset in ipairs({{'Violet',.69},{'Ocean',.53},{'Mint',.4},{'Gold',.12},{'Rose',.94}}) do
+    local name,hue=preset[1],preset[2]
+    action('Launcher','Theme: '..name,function() controls.hue.set(hue,true) end)
+end
 action('Tools','Sit',function() humanoid().Sit=true end)
 action('Tools','Stand',function() humanoid().Sit=false end)
 action('Tools','Restore all settings',function()
     for k in pairs(flags) do flags[k]=false end
     stopFlight(); clearHighlights(); restoreAll()
     for _,label in pairs(labels) do label:Destroy() end; labels={}
+    clearTrail(); clearLamp(); blurEffect.Enabled=false; sunEffect.Enabled=false; crosshair.Visible=false
     for k,v in pairs(defaults) do flags[k]=v end
     tintEffect.Enabled=false; tintEffect.Saturation=0; tintEffect.Contrast=0
     bloomEffect.Enabled=false; bloomEffect.Intensity=1
@@ -386,7 +468,7 @@ action('Tools','Restore all settings',function()
     for _,control in pairs(controls) do control.set(control.initial,false,true) end
     refreshRows()
 end)
--- Seven families x 30 explicit values = 210 selectable presets.
+-- Seventeen parameter families x 30 unique values = 510 explicitly labeled presets.
 local families = {
     {'walk','Walk speed',function(i) return 8+i*4 end},
     {'jump','Jump power',function(i) return 20+i*4 end},
@@ -395,6 +477,16 @@ local families = {
     {'brightness','Brightness',function(i) return i/10 end},
     {'gravity','Gravity',function(i) return i*10 end},
     {'clock','Time of day',function(i) return (i-1)*.8 end},
+    {'vertical','Flight vertical speed',function(i) return i*5 end},
+    {'sprint','Sprint speed',function(i) return i*5 end},
+    {'dash','Dash speed',function(i) return i*8 end},
+    {'step','Teleport step',function(i) return i*3 end},
+    {'spin','Spin speed',function(i) return -300+(i-1)*20 end},
+    {'hip','Hip height',function(i) return (i-1)*.5 end},
+    {'slope','Maximum slope',function(i) return (i-1)*3 end},
+    {'zoom','Maximum camera zoom',function(i) return i*25 end},
+    {'cameraHeight','Camera height',function(i) return -5+(i-1)*.5 end},
+    {'exposure','Exposure',function(i) return -1.5+(i-1)*.1 end},
 }
 for _,family in ipairs(families) do
     for i=1,30 do
@@ -410,7 +502,8 @@ local function unload()
     flags.Fly=false; flags.Spin=false
     stopFlight(); clearHighlights(); restoreAll()
     for _,label in pairs(labels) do label:Destroy() end
-    tintEffect:Destroy(); bloomEffect:Destroy()
+    clearTrail(); clearLamp()
+    tintEffect:Destroy(); bloomEffect:Destroy(); blurEffect:Destroy(); sunEffect:Destroy()
     for _,t in pairs(activeTweens) do t:Cancel() end
     for _,c in ipairs(connections) do c:Disconnect() end
     gui:Destroy()
@@ -443,6 +536,11 @@ connect(Run.PreSimulation,function(dt)
     local c,h,r=body()
     up.Visible=flags.Fly; down.Visible=flags.Fly
     if not c or not h or not r or h.Health<=0 then return end
+    if flags.HideSelf then
+        for _,part in ipairs(c:GetDescendants()) do
+            if part:IsA('BasePart') then write(part,'LocalTransparencyModifier',1) end
+        end
+    end
     if flags.Noclip then
         for _,part in ipairs(c:GetDescendants()) do
             if part:IsA('BasePart') then write(part,'CanCollide',false) end
@@ -509,6 +607,16 @@ local frameCount, frameTime, fps=0,0,60
 connect(Run.RenderStepped,function(dt)
     frameCount=frameCount+1; frameTime=frameTime+dt
     if frameTime>=.5 then fps=math.floor(frameCount/frameTime+.5); frameCount=0; frameTime=0 end
+    local pulse=flags.LauncherPulse and math.sin(os.clock()*settings.pulseRate*math.pi*2) or 0
+    local target=launcherPress and .94 or (launcherHover and 1.07 or 1)
+    launcherScale.Scale=launcherScale.Scale+(target+pulse*settings.pulseSize-launcherScale.Scale)*math.min(1,dt*15)
+    launcherStroke.Transparency=.22-.16*pulse
+    launcherStroke.Thickness=2+.4*pulse
+    launcherStroke.Color=accent; launcherState.TextColor3=accent
+    launcherGradient.Rotation=(os.clock()*25)%360
+    launcherTitle.Rotation=launcherDrag and math.clamp((launcherDrag.tilt or 0)*.08,-9,9) or math.sin(os.clock()*1.6)*1.5
+    launcherDot.BackgroundColor3=menuOpen and Color3.fromRGB(96,244,170) or accent
+    if flags.DayCycle then write(Light,'ClockTime',(Light.ClockTime+dt*settings.dayRate/60)%24) end
 end)
 connect(Run.Heartbeat,function(dt)
     elapsed=elapsed+dt
@@ -518,7 +626,7 @@ connect(Run.Heartbeat,function(dt)
     for obj in pairs(changes) do if not obj.Parent then changes[obj]=nil end end
     local hue=flags.Rainbow and ((os.clock()*.08)%1) or settings.hue
     accent=Color3.fromHSV(hue,.65,1)
-    stroke.Color=accent; opener.BackgroundColor3=accent; list.ScrollBarImageColor3=accent
+    stroke.Color=accent; list.ScrollBarImageColor3=accent
     gradient.Color=ColorSequence.new(accent,Color3.fromHSV((hue+.17)%1,.6,1))
     gradient.Rotation=(os.clock()*35)%360
     for _,control in pairs(controls) do control.fill.BackgroundColor3=accent end
@@ -526,10 +634,29 @@ connect(Run.Heartbeat,function(dt)
     liveHUD.Visible=flags.HUD
     local _,_,ownRoot=body()
     liveHUD.Text=string.format('DPM  |  %d FPS  |  %.1f studs/s',fps,ownRoot and ownRoot.AssemblyLinearVelocity.Magnitude or 0)
+    crosshair.Visible=flags.Crosshair
+    if flags.NoFog then applyFogRemoval() end
+    if flags.Trail and ownRoot then
+        if not trail or trail.Parent~=ownRoot then
+            clearTrail()
+            trailLeft=make('Attachment',{Position=Vector3.new(-.7,0,0)},ownRoot)
+            trailRight=make('Attachment',{Position=Vector3.new(.7,0,0)},ownRoot)
+            trail=make('Trail',{Name='DPM_Trail',Attachment0=trailLeft,Attachment1=trailRight,
+                FaceCamera=true,LightEmission=1,MinLength=.05},ownRoot)
+        end
+        trail.Lifetime=settings.trailLife; trail.Color=ColorSequence.new(accent,Color3.fromHSV((hue+.2)%1,.7,1))
+    elseif not ownRoot then clearTrail() end
+    if flags.Headlamp and ownRoot then
+        if not headlamp or headlamp.Parent~=ownRoot then
+            clearLamp(); headlamp=make('PointLight',{Name='DPM_Headlamp',Range=32,Shadows=false},ownRoot)
+        end
+        headlamp.Brightness=settings.lampPower
+    elseif not ownRoot then clearLamp() end
     local present={} 
     for _,p in ipairs(Players:GetPlayers()) do
         local c=p.Character
-        if p~=me and c and c.Parent and not (flags.TeamFilter and me.Team~=nil and p.Team==me.Team) then
+        local ph=c and c:FindFirstChildOfClass('Humanoid')
+        if p~=me and c and c.Parent and not (flags.AliveOnly and (not ph or ph.Health<=0)) and not (flags.TeamFilter and me.Team~=nil and p.Team==me.Team) then
             present[p]=true
             if highlights[p] and highlights[p].Adornee~=c then highlights[p]:Destroy(); highlights[p]=nil end
             if flags.Outlines and not highlights[p] then
@@ -598,10 +725,10 @@ connect(UIS.InputChanged,function(input)
     panel.Position=UDim2.fromOffset(math.clamp(start.X.Offset+d.X,0,math.max(0,v.X-560*scale.Scale)),
         math.clamp(start.Y.Offset+d.Y,0,math.max(0,v.Y-48*scale.Scale-40)))
 end)
-local menuOpen=true
 local transition=0
 local function togglePanel()
     menuOpen=not menuOpen; transition=transition+1
+    launcherState.Text=menuOpen and 'CLOSE' or 'OPEN'
     local token=transition
     if menuOpen then
         panel.Visible=true; openAmount=1
@@ -614,7 +741,61 @@ local function togglePanel()
     end
 end
 connect(hide.Activated,togglePanel)
-connect(opener.Activated,togglePanel)
+-- Dragging does not activate the launcher. Use its own gesture lifetime.
+local function launcherRect()
+    local size=launcherBounds.AbsoluteSize
+    return math.max(100,size.X),math.max(100,size.Y)
+end
+local function launcherXY()
+    local w,h=launcherRect()
+    return opener.Position.X.Scale*w+opener.Position.X.Offset,opener.Position.Y.Scale*h+opener.Position.Y.Offset
+end
+snapLauncher=function(smooth)
+    local w,h=launcherRect()
+    local x,y=launcherXY()
+    x=(x+34<w/2) and 14 or math.max(14,w-82)
+    y=math.clamp(y,14,math.max(14,h-76))
+    if smooth then animate(opener,{Position=UDim2.fromOffset(x,y)},.25)
+    else opener.Position=UDim2.fromOffset(x,y) end
+end
+connect(launcherBounds:GetPropertyChangedSignal('AbsoluteSize'),function() if not launcherDrag then snapLauncher(false) end end)
+connect(opener.MouseEnter,function() launcherHover=true end)
+connect(opener.MouseLeave,function() launcherHover=false end)
+connect(opener.InputBegan,function(input)
+    if input.UserInputType~=Enum.UserInputType.MouseButton1 and input.UserInputType~=Enum.UserInputType.Touch then return end
+    if launcherDrag then return end
+    if activeTweens[opener] then activeTweens[opener]:Cancel() end
+    local x,y=launcherXY()
+    launcherDrag={input=input,origin=input.Position,x=x,y=y,tilt=0}
+    launcherMoved=false; launcherPress=true
+end)
+connect(UIS.InputChanged,function(input)
+    if not launcherDrag then return end
+    if input~=launcherDrag.input and not (launcherDrag.input.UserInputType==Enum.UserInputType.MouseButton1
+        and input.UserInputType==Enum.UserInputType.MouseMovement) then return end
+    local delta=input.Position-launcherDrag.origin
+    if delta.Magnitude>7 then launcherMoved=true end
+    if launcherMoved then
+        local w,h=launcherRect()
+        launcherDrag.tilt=delta.X
+        opener.Position=UDim2.fromOffset(math.clamp(launcherDrag.x+delta.X,14,math.max(14,w-82)),
+            math.clamp(launcherDrag.y+delta.Y,14,math.max(14,h-76)))
+    end
+end)
+connect(UIS.InputEnded,function(input)
+    if not launcherDrag or input~=launcherDrag.input then return end
+    local moved=launcherMoved
+    launcherDrag=nil; launcherPress=false
+    if moved then snapLauncher(true) else togglePanel() end
+end)
+connect(UIS.WindowFocusReleased,function()
+    launcherDrag=nil; launcherPress=false; launcherHover=false; snapLauncher(false)
+end)
+-- Keyboard/gamepad activation uses Activated; pointer taps use InputEnded above.
+connect(opener.Activated,function(input)
+    if input and input.UserInputType~=Enum.UserInputType.MouseButton1 and input.UserInputType~=Enum.UserInputType.Touch then togglePanel() end
+end)
+snapLauncher(false)
 connect(UIS.InputBegan,function(input,processed)
     if processed or UIS:GetFocusedTextBox() then return end
     if input.KeyCode==Enum.KeyCode.RightShift then togglePanel() end
@@ -622,3 +803,4 @@ connect(UIS.InputBegan,function(input,processed)
 end)
 refreshRows()
 filter()
+status.Text='510 presets | 30 sliders | 26 toggles | Drag DPM to move it'
