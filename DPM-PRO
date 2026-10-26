@@ -1,4 +1,5 @@
--- DPM v3: draggable animated launcher, 510 numeric presets, live sliders, and tools.
+-- DPM Glass: translucent interface, adjustable glass opacity, animated highlights.
+-- 510 numeric presets, 31 sliders, and 26 toggles. Text remains opaque for readability.
 -- Presets are parameter values, not 510 distinct game-specific cheats.
 -- Launcher: tap to open/close; drag to reposition; release to snap to an edge.
 -- Drag a slider or enter a value; edits apply immediately. RESET restores launch values.
@@ -33,7 +34,7 @@ for k,v in pairs(flags) do defaults[k]=v end
 local controls, labels, activeTweens = {}, {}, {}
 local waypoints = {}
 local animationTime, baseScale, openAmount = .18, 1, 1
-local settings = {walk=16,fly=55,vertical=45,acceleration=8,jump=50,gravity=196.2,
+local settings = {glass=.45,walk=16,fly=55,vertical=45,acceleration=8,jump=50,gravity=196.2,
     sprint=32,spin=90,dash=80,step=10,hip=2,slope=89,fov=70,zoom=128,
     cameraHeight=0,brightness=2,clock=12,exposure=0,saturation=0,contrast=0,
     bloom=1,opacity=.8,hue=.69}
@@ -63,6 +64,34 @@ local function animate(obj, properties, duration)
     local t=Tween:Create(obj,TweenInfo.new(duration or animationTime,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),properties)
     activeTweens[obj]=t
     t:Play()
+end
+-- Translucent surfaces use independently readable text and white edge highlights.
+local glassSurfaces={}
+local function glassAlpha(entry,value)
+    return math.clamp(value+entry.offset-(entry.hovered and .12 or 0),.08,.9)
+end
+local function applyGlass(value)
+    for obj,entry in pairs(glassSurfaces) do
+        if obj.Parent then
+            animate(obj,{BackgroundTransparency=glassAlpha(entry,value)},.15)
+        end
+    end
+end
+local function glass(obj,offset,border)
+    local entry={offset=offset or 0,hovered=false}
+    glassSurfaces[obj]=entry
+    obj.BackgroundTransparency=glassAlpha(entry,settings.glass)
+    if border then
+        make('UIStroke',{Color=Color3.fromRGB(218,234,255),Thickness=1,
+            Transparency=.8,ApplyStrokeMode=Enum.ApplyStrokeMode.Border},obj)
+    end
+end
+local function glassHover(obj,hovered)
+    local entry=glassSurfaces[obj]
+    if entry then
+        entry.hovered=hovered
+        animate(obj,{BackgroundTransparency=glassAlpha(entry,settings.glass)},.16)
+    end
 end
 local function corner(x) make('UICorner', {CornerRadius=UDim.new(0,9)}, x) end
 local function write(obj, key, value)
@@ -107,8 +136,17 @@ local unloadEvent = make('BindableEvent', {Name='Unload'}, gui)
 local panel = make('Frame', {Size=UDim2.fromOffset(560,500), Position=UDim2.new(.5,-280,.5,-220),
     BackgroundColor3=Color3.fromRGB(19,20,29), BorderSizePixel=0}, gui)
 corner(panel)
+glass(panel,0,false)
+local panelGradient=make('UIGradient',{Rotation=115,
+    Color=ColorSequence.new(Color3.fromRGB(145,170,211),Color3.fromRGB(58,70,102)),
+    Transparency=NumberSequence.new({NumberSequenceKeypoint.new(0,.05),
+        NumberSequenceKeypoint.new(.5,.2),NumberSequenceKeypoint.new(1,0)})},panel)
+local glint=make('Frame',{Size=UDim2.new(1,-30,0,1),Position=UDim2.fromOffset(15,1),
+    BorderSizePixel=0,BackgroundColor3=Color3.fromRGB(228,242,255),BackgroundTransparency=.2},panel)
+local glintGradient=make('UIGradient',{Transparency=NumberSequence.new({
+    NumberSequenceKeypoint.new(0,1),NumberSequenceKeypoint.new(.5,.1),NumberSequenceKeypoint.new(1,1)})},glint)
 local scale = make('UIScale', {Scale=1}, panel)
-local stroke=make('UIStroke',{Color=accent,Thickness=1.5,Transparency=.2},panel)
+local stroke=make('UIStroke',{Color=accent,Thickness=1.2,Transparency=.4},panel)
 local ribbon=make('Frame',{Size=UDim2.new(1,-24,0,3),Position=UDim2.fromOffset(12,46),
     BorderSizePixel=0,BackgroundColor3=Color3.new(1,1,1)},panel)
 local gradient=make('UIGradient',{Color=ColorSequence.new(accent,Color3.fromRGB(47,220,233))},ribbon)
@@ -116,10 +154,11 @@ local liveHUD=make('TextLabel',{Size=UDim2.fromOffset(280,28),Position=UDim2.new
     BackgroundColor3=Color3.fromRGB(19,20,29),BackgroundTransparency=.2,
     Text='',TextColor3=Color3.new(1,1,1),Font=Enum.Font.Gotham,TextSize=12},gui)
 corner(liveHUD)
+glass(liveHUD,-.12,true)
 tintEffect=make('ColorCorrectionEffect',{Name='DPM_Color',Enabled=false},Light)
 bloomEffect=make('BloomEffect',{Name='DPM_Bloom',Enabled=false,Size=24,Threshold=1},Light)
 local header = make('TextLabel', {Size=UDim2.new(1,-55,0,48), Position=UDim2.fromOffset(15,0),
-    BackgroundTransparency=1, Text='DPM  /  DYNAMIC V3', Font=Enum.Font.GothamBold,
+    BackgroundTransparency=1, Text='DPM  /  GLASS', Font=Enum.Font.GothamBold,
     TextColor3=Color3.new(1,1,1), TextSize=18, TextXAlignment=Enum.TextXAlignment.Left,
     Active=true}, panel)
 local function button(text, parent, size, pos, noHover)
@@ -127,9 +166,10 @@ local function button(text, parent, size, pos, noHover)
         BackgroundColor3=Color3.fromRGB(37,38,53), TextColor3=Color3.fromRGB(234,235,245),
         BorderSizePixel=0, Font=Enum.Font.Gotham, TextSize=13, AutoButtonColor=true}, parent)
     corner(b)
+    glass(b,.14,true)
     if not noHover then
-        connect(b.MouseEnter,function() animate(b,{BackgroundTransparency=.18}) end)
-        connect(b.MouseLeave,function() animate(b,{BackgroundTransparency=0}) end)
+        connect(b.MouseEnter,function() glassHover(b,true) end)
+        connect(b.MouseLeave,function() glassHover(b,false) end)
     end
     return b
 end
@@ -138,7 +178,8 @@ local launcherBounds=make('Frame',{Name='LauncherBounds',Size=UDim2.fromScale(1,
     BackgroundTransparency=1,Active=false,ZIndex=20},gui)
 local opener = button('DPM', launcherBounds, UDim2.fromOffset(68,58), UDim2.new(0,14,.5,-29),true)
 opener.Name='DPM_Launcher'; opener.ZIndex=21; opener.AutoButtonColor=false
-opener.BackgroundColor3=Color3.fromRGB(25,27,43); opener.Text=''
+opener.BackgroundColor3=Color3.fromRGB(45,54,77); opener.Text=''
+glassSurfaces[opener].offset=-.1; opener.BackgroundTransparency=settings.glass-.1
 local launcherScale=make('UIScale',{Scale=1},opener)
 local launcherStroke=make('UIStroke',{Color=accent,Thickness=2,Transparency=.1},opener)
 local launcherGradient=make('UIGradient',{Color=ColorSequence.new(Color3.fromRGB(74,66,120),Color3.fromRGB(24,27,44)),Rotation=25},opener)
@@ -162,6 +203,7 @@ local search = make('TextBox', {Size=UDim2.new(1,-24,0,34), Position=UDim2.fromO
     PlaceholderText='Search tools or presets...', Text='', ClearTextOnFocus=false,
     Font=Enum.Font.Gotham, TextSize=14, BorderSizePixel=0}, panel)
 corner(search)
+glass(search,-.12,true)
 local tabs = make('ScrollingFrame', {Size=UDim2.new(1,-24,0,32), Position=UDim2.fromOffset(12,92),
     BackgroundTransparency=1,BorderSizePixel=0,ScrollBarThickness=0,CanvasSize=UDim2.new(),
     AutomaticCanvasSize=Enum.AutomaticSize.X,ScrollingDirection=Enum.ScrollingDirection.X}, panel)
@@ -218,6 +260,7 @@ local function slider(group,id,name,low,high,step,initial,apply)
     local box=make('Frame',{Size=UDim2.new(1,-6,0,80),BackgroundColor3=Color3.fromRGB(29,30,43),
         BorderSizePixel=0,LayoutOrder=#rows+1},list)
     corner(box)
+    glass(box,.16,true)
     make('TextLabel',{Text=name,Position=UDim2.fromOffset(12,6),Size=UDim2.new(1,-150,0,27),
         BackgroundTransparency=1,TextColor3=Color3.fromRGB(235,235,249),Font=Enum.Font.Gotham,
         TextSize=13,TextXAlignment=Enum.TextXAlignment.Left},box)
@@ -225,12 +268,14 @@ local function slider(group,id,name,low,high,step,initial,apply)
         BackgroundColor3=Color3.fromRGB(42,44,62),TextColor3=Color3.new(1,1,1),BorderSizePixel=0,
         Font=Enum.Font.GothamBold,TextSize=13,ClearTextOnFocus=false},box)
     corner(valueBox)
+    glass(valueBox,-.12,true)
     local reset=button('R',box,UDim2.fromOffset(28,26),UDim2.new(1,-39,0,7))
     local hit=make('TextButton',{Name='SliderTrack',Text='',Size=UDim2.new(1,-32,0,36),
         Position=UDim2.fromOffset(16,35),BackgroundTransparency=1,AutoButtonColor=false},box)
     local track=make('Frame',{Size=UDim2.new(1,0,0,6),Position=UDim2.new(0,0,.5,-3),
         BackgroundColor3=Color3.fromRGB(53,55,76),BorderSizePixel=0},hit)
     corner(track)
+    track.BackgroundTransparency=.3
     local fill=make('Frame',{Size=UDim2.new(0,0,1,0),BackgroundColor3=accent,BorderSizePixel=0},track)
     corner(fill)
     local knob=make('Frame',{Size=UDim2.fromOffset(16,16),AnchorPoint=Vector2.new(.5,.5),
@@ -316,6 +361,7 @@ slider('Visual','bloom','Bloom intensity',0,5,.1,1,function(v) bloomEffect.Inten
 slider('Visual','opacity','Outline fill transparency',0,1,.05,.8,function() end)
 slider('Visual','hue','Accent hue',0,1,.01,.69,function() flags.Rainbow=false; refreshRows() end)
 slider('Visual','animation','Menu animation duration',0,.6,.02,.18,function(v) animationTime=v end)
+slider('Visual','glass','Glass transparency',.15,.8,.01,.45,function(v) applyGlass(v) end)
 slider('World','dayRate','Day cycle (hours/minute)',0,24,.1,1,function() end)
 slider('Visual','trailLife','Trail lifetime (seconds)',.1,5,.1,1,function() end)
 slider('Visual','lampPower','Headlamp brightness',0,10,.1,3,function() end)
@@ -466,6 +512,7 @@ action('Tools','Restore all settings',function()
     bloomEffect.Enabled=false; bloomEffect.Intensity=1
     flySpeed=55; animationTime=.18; liveSettings={}
     for _,control in pairs(controls) do control.set(control.initial,false,true) end
+    applyGlass(settings.glass)
     refreshRows()
 end)
 -- Seventeen parameter families x 30 unique values = 510 explicitly labeled presets.
@@ -614,6 +661,11 @@ connect(Run.RenderStepped,function(dt)
     launcherStroke.Thickness=2+.4*pulse
     launcherStroke.Color=accent; launcherState.TextColor3=accent
     launcherGradient.Rotation=(os.clock()*25)%360
+    if panel.Visible then
+        panelGradient.Rotation=115+math.sin(os.clock()*.35)*12
+        glintGradient.Offset=Vector2.new(math.sin(os.clock()*.45)*.55,0)
+        stroke.Transparency=.38+math.sin(os.clock()*1.5)*.1
+    end
     launcherTitle.Rotation=launcherDrag and math.clamp((launcherDrag.tilt or 0)*.08,-9,9) or math.sin(os.clock()*1.6)*1.5
     launcherDot.BackgroundColor3=menuOpen and Color3.fromRGB(96,244,170) or accent
     if flags.DayCycle then write(Light,'ClockTime',(Light.ClockTime+dt*settings.dayRate/60)%24) end
@@ -755,16 +807,19 @@ snapLauncher=function(smooth)
     local x,y=launcherXY()
     x=(x+34<w/2) and 14 or math.max(14,w-82)
     y=math.clamp(y,14,math.max(14,h-76))
-    if smooth then animate(opener,{Position=UDim2.fromOffset(x,y)},.25)
+    if smooth then
+        if activeTweens.launcherSnap then activeTweens.launcherSnap:Cancel() end
+        local snap=Tween:Create(opener,TweenInfo.new(.25,Enum.EasingStyle.Quad,Enum.EasingDirection.Out),{Position=UDim2.fromOffset(x,y)})
+        activeTweens.launcherSnap=snap; snap:Play()
     else opener.Position=UDim2.fromOffset(x,y) end
 end
 connect(launcherBounds:GetPropertyChangedSignal('AbsoluteSize'),function() if not launcherDrag then snapLauncher(false) end end)
-connect(opener.MouseEnter,function() launcherHover=true end)
-connect(opener.MouseLeave,function() launcherHover=false end)
+connect(opener.MouseEnter,function() launcherHover=true; glassHover(opener,true) end)
+connect(opener.MouseLeave,function() launcherHover=false; glassHover(opener,false) end)
 connect(opener.InputBegan,function(input)
     if input.UserInputType~=Enum.UserInputType.MouseButton1 and input.UserInputType~=Enum.UserInputType.Touch then return end
     if launcherDrag then return end
-    if activeTweens[opener] then activeTweens[opener]:Cancel() end
+    if activeTweens.launcherSnap then activeTweens.launcherSnap:Cancel() end
     local x,y=launcherXY()
     launcherDrag={input=input,origin=input.Position,x=x,y=y,tilt=0}
     launcherMoved=false; launcherPress=true
@@ -803,4 +858,4 @@ connect(UIS.InputBegan,function(input,processed)
 end)
 refreshRows()
 filter()
-status.Text='510 presets | 30 sliders | 26 toggles | Drag DPM to move it'
+status.Text='GLASS | 510 presets | 31 sliders | Transparency in Controls'
