@@ -1,0 +1,335 @@
+-- DPM: client menu, 210 presets plus tools. No external downloads.
+-- Run in a Roblox client Lua environment; in Studio use StarterPlayerScripts.
+-- Not a universal game adapter. Server authority/custom controllers may override effects.
+-- RightShift or floating DPM button: toggle. Drag header. Unload restores saved values.
+local Players = game:GetService('Players')
+local UIS = game:GetService('UserInputService')
+local Run = game:GetService('RunService')
+local Tween = game:GetService('TweenService')
+local Light = game:GetService('Lighting')
+local me = Players.LocalPlayer
+assert(me, 'DPM requires a client context')
+local pg = me:WaitForChild('PlayerGui')
+local prior = pg:FindFirstChild('DPM_Client')
+if prior then
+    local stop = prior:FindFirstChild('Unload')
+    if stop then stop:Fire() else prior:Destroy() end
+end
+local connections, rows, highlights, changes = {}, {}, {}, {}
+local flags = {Fly=false, Noclip=false, Outlines=false, AirJump=false}
+local flySpeed, alive, bookmark = 55, true, nil
+local accent = Color3.fromRGB(117, 96, 255)
+local function connect(signal, fn)
+    local c = signal:Connect(fn)
+    table.insert(connections, c)
+    return c
+end
+local function make(kind, props, parent)
+    local x = Instance.new(kind)
+    for k,v in pairs(props) do x[k] = v end
+    x.Parent = parent
+    return x
+end
+local function corner(x) make('UICorner', {CornerRadius=UDim.new(0,9)}, x) end
+local function write(obj, key, value)
+    if not obj then error('Object is not available yet') end
+    if not changes[obj] then changes[obj] = {} end
+    if changes[obj][key] == nil then changes[obj][key] = {obj[key]} end
+    obj[key] = value
+end
+local function restoreKey(obj, key)
+    local saved = changes[obj]
+    if saved and saved[key] then
+        pcall(function() obj[key] = saved[key][1] end)
+        saved[key] = nil
+        if next(saved) == nil then changes[obj] = nil end
+    end
+end
+local function restoreAll()
+    for obj, props in pairs(changes) do
+        for key, value in pairs(props) do
+            pcall(function() obj[key] = value[1] end)
+        end
+    end
+    changes = {}
+end
+local function body()
+    local c = me.Character
+    return c, c and c:FindFirstChildOfClass('Humanoid'), c and c:FindFirstChild('HumanoidRootPart')
+end
+local function humanoid()
+    local _,h = body()
+    assert(h, 'Wait for your character to spawn')
+    return h
+end
+local function root()
+    local _,_,r = body()
+    assert(r, 'Wait for your character to spawn')
+    return r
+end
+local gui = make('ScreenGui', {Name='DPM_Client', ResetOnSpawn=false, DisplayOrder=90,
+    ZIndexBehavior=Enum.ZIndexBehavior.Sibling}, pg)
+local unloadEvent = make('BindableEvent', {Name='Unload'}, gui)
+local panel = make('Frame', {Size=UDim2.fromOffset(560,440), Position=UDim2.new(.5,-280,.5,-220),
+    BackgroundColor3=Color3.fromRGB(19,20,29), BorderSizePixel=0}, gui)
+corner(panel)
+local scale = make('UIScale', {Scale=1}, panel)
+local header = make('TextLabel', {Size=UDim2.new(1,-55,0,48), Position=UDim2.fromOffset(15,0),
+    BackgroundTransparency=1, Text='DPM  /  CLIENT TOOLKIT', Font=Enum.Font.GothamBold,
+    TextColor3=Color3.new(1,1,1), TextSize=18, TextXAlignment=Enum.TextXAlignment.Left,
+    Active=true}, panel)
+local function button(text, parent, size, pos)
+    local b = make('TextButton', {Text=text, Size=size, Position=pos or UDim2.new(),
+        BackgroundColor3=Color3.fromRGB(37,38,53), TextColor3=Color3.fromRGB(234,235,245),
+        BorderSizePixel=0, Font=Enum.Font.Gotham, TextSize=13, AutoButtonColor=true}, parent)
+    corner(b)
+    return b
+end
+local hide = button('-', panel, UDim2.fromOffset(35,30), UDim2.new(1,-45,0,9))
+local opener = button('DPM', gui, UDim2.fromOffset(58,42), UDim2.new(0,12,.5,-21))
+opener.BackgroundColor3 = accent
+local search = make('TextBox', {Size=UDim2.new(1,-24,0,34), Position=UDim2.fromOffset(12,50),
+    BackgroundColor3=Color3.fromRGB(30,31,43), TextColor3=Color3.new(1,1,1),
+    PlaceholderText='Search tools or presets...', Text='', ClearTextOnFocus=false,
+    Font=Enum.Font.Gotham, TextSize=14, BorderSizePixel=0}, panel)
+corner(search)
+local tabs = make('Frame', {Size=UDim2.new(1,-24,0,32), Position=UDim2.fromOffset(12,92),
+    BackgroundTransparency=1}, panel)
+make('UIListLayout', {FillDirection=Enum.FillDirection.Horizontal, Padding=UDim.new(0,6)}, tabs)
+local list = make('ScrollingFrame', {Size=UDim2.new(1,-24,1,-170), Position=UDim2.fromOffset(12,133),
+    BackgroundTransparency=1, BorderSizePixel=0, ScrollBarThickness=4,
+    CanvasSize=UDim2.new(), AutomaticCanvasSize=Enum.AutomaticSize.Y}, panel)
+make('UIListLayout', {Padding=UDim.new(0,6), SortOrder=Enum.SortOrder.LayoutOrder}, list)
+local status = make('TextLabel', {Size=UDim2.new(1,-24,0,26), Position=UDim2.new(0,12,1,-31),
+    BackgroundTransparency=1, Text='Ready | 210 presets + tools | RightShift: toggle',
+    Font=Enum.Font.Gotham, TextSize=12, TextColor3=Color3.fromRGB(171,175,198),
+    TextXAlignment=Enum.TextXAlignment.Left, TextTruncate=Enum.TextTruncate.AtEnd}, panel)
+local selected, tabButtons = 'All', {}
+local function filter()
+    local q = string.lower(search.Text)
+    for _,r in ipairs(rows) do
+        r.button.Visible = (selected=='All' or r.group==selected)
+            and string.find(string.lower(r.name..' '..r.group),q,1,true) ~= nil
+    end
+    for name,b in pairs(tabButtons) do
+        b.BackgroundColor3 = name==selected and accent or Color3.fromRGB(37,38,53)
+    end
+    list.CanvasPosition = Vector2.new()
+end
+for _,name in ipairs({'All','Tools','Movement','Visual','World'}) do
+    local category = name
+    local b = button(category,tabs,UDim2.fromOffset(100,30))
+    tabButtons[category] = b
+    connect(b.Activated,function() selected=category; filter() end)
+end
+connect(search:GetPropertyChangedSignal('Text'),filter)
+local function action(group,name,fn,state)
+    local b = button(name,list,UDim2.new(1,-6,0,35))
+    b.LayoutOrder = #rows+1
+    local row = {button=b,group=group,name=name,state=state}
+    table.insert(rows,row)
+    connect(b.Activated,function()
+        local ok,err = pcall(fn)
+        status.Text = ok and ('Applied: '..name) or ('Unavailable: '..tostring(err))
+        if state then b.Text=name..(state() and '  [ON]' or '  [OFF]') end
+    end)
+    if state then b.Text=name..'  [OFF]' end
+end
+local function clearHighlights()
+    for _,h in pairs(highlights) do h:Destroy() end
+    highlights = {}
+end
+local function restoreCollisions()
+    local targets = {}
+    for obj,props in pairs(changes) do
+        if props.CanCollide then table.insert(targets,obj) end
+    end
+    for _,obj in ipairs(targets) do restoreKey(obj,'CanCollide') end
+end
+local function stopFlight()
+    local _,h,r = body()
+    if h then restoreKey(h,'PlatformStand'); restoreKey(h,'AutoRotate') end
+    if r then r.AssemblyLinearVelocity=Vector3.new() end
+end
+for _,entry in ipairs({{'Fly','Flight'},{'Noclip','Noclip'},
+    {'Outlines','Player outlines / ESP'},{'AirJump','Air jump'}}) do
+    local key,label = entry[1],entry[2]
+    action('Tools',label,function()
+        flags[key]=not flags[key]
+        if key=='Fly' and not flags.Fly then stopFlight() end
+        if key=='Noclip' and not flags.Noclip then restoreCollisions() end
+        if key=='Outlines' and not flags.Outlines then clearHighlights() end
+    end,function() return flags[key] end)
+end
+action('Tools','Save position',function() bookmark=root().CFrame end)
+action('Tools','Return to saved position',function()
+    assert(bookmark,'Save a position first'); root().CFrame=bookmark
+end)
+action('Tools','Teleport 10 studs forward',function()
+    local r=root(); r.CFrame=r.CFrame*CFrame.new(0,0,-10)
+end)
+action('Tools','Teleport 10 studs upward',function()
+    local r=root(); r.CFrame=r.CFrame+Vector3.new(0,10,0)
+end)
+action('Tools','Sit',function() humanoid().Sit=true end)
+action('Tools','Stand',function() humanoid().Sit=false end)
+action('Tools','Restore all settings',function()
+    for k in pairs(flags) do flags[k]=false end
+    stopFlight(); clearHighlights(); restoreAll()
+    flySpeed=55
+    for _,r in ipairs(rows) do if r.state then r.button.Text=r.name..'  [OFF]' end end
+end)
+-- Seven families x 30 explicit values = 210 selectable presets.
+local families = {
+    {'Movement','Walk speed',function(i) return 8+i*4 end,
+        function(v) write(humanoid(),'WalkSpeed',v) end},
+    {'Movement','Jump power',function(i) return 20+i*4 end,
+        function(v) local h=humanoid(); write(h,'UseJumpPower',true); write(h,'JumpPower',v) end},
+    {'Movement','Flight speed',function(i) return i*5 end,function(v) flySpeed=v end},
+    {'Visual','Field of view',function(i) return 30+i*3 end,
+        function(v) write(workspace.CurrentCamera,'FieldOfView',v) end},
+    {'Visual','Brightness',function(i) return i/10 end,
+        function(v) write(Light,'Brightness',v) end},
+    {'World','Gravity',function(i) return i*10 end,
+        function(v) write(workspace,'Gravity',v) end},
+    {'World','Time of day',function(i) return (i-1)*.8 end,
+        function(v) write(Light,'ClockTime',v) end},
+}
+for _,family in ipairs(families) do
+    for i=1,30 do
+        local value,setter = family[3](i),family[4]
+        action(family[1],family[2]..' = '..string.format('%g',value),function() setter(value) end)
+    end
+end
+local function unload()
+    if not alive then return end
+    alive=false
+    flags.Fly=false
+    stopFlight(); clearHighlights(); restoreAll()
+    for _,c in ipairs(connections) do c:Disconnect() end
+    gui:Destroy()
+end
+action('Tools','Unload and restore',unload)
+connect(unloadEvent.Event,unload)
+connect(gui.Destroying,unload)
+-- Touch flight controls; desktop uses Space / LeftControl.
+local vertical = 0
+local up = button('UP',gui,UDim2.fromOffset(58,42),UDim2.new(1,-72,.5,-48))
+local down = button('DOWN',gui,UDim2.fromOffset(58,42),UDim2.new(1,-72,.5,0))
+up.Visible=false; down.Visible=false
+for _,pair in ipairs({{up,1},{down,-1}}) do
+    local b,dir=pair[1],pair[2]
+    connect(b.InputBegan,function(input)
+        if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then vertical=dir end
+    end)
+end
+connect(UIS.InputEnded,function(input)
+    if input.UserInputType==Enum.UserInputType.Touch or input.UserInputType==Enum.UserInputType.MouseButton1 then vertical=0 end
+end)
+connect(UIS.WindowFocusReleased,function() vertical=0 end)
+connect(UIS.JumpRequest,function()
+    local _,h=body()
+    if flags.AirJump and h and h.Health>0 and not UIS:GetFocusedTextBox() then
+        h:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+connect(Run.PreSimulation,function()
+    local c,h,r=body()
+    up.Visible=flags.Fly; down.Visible=flags.Fly
+    if not c or not h or not r or h.Health<=0 then return end
+    if flags.Noclip then
+        for _,part in ipairs(c:GetDescendants()) do
+            if part:IsA('BasePart') then write(part,'CanCollide',false) end
+        end
+    end
+    if flags.Fly then
+        write(h,'PlatformStand',true); write(h,'AutoRotate',false)
+        local camera=workspace.CurrentCamera
+        if not camera then return end
+        local direction=h.MoveDirection
+        local y=vertical
+        if not UIS:GetFocusedTextBox() then
+            if UIS:IsKeyDown(Enum.KeyCode.Space) then y=y+1 end
+            if UIS:IsKeyDown(Enum.KeyCode.LeftControl) then y=y-1 end
+            if UIS.KeyboardEnabled then
+                local x=(UIS:IsKeyDown(Enum.KeyCode.D) and 1 or 0)-(UIS:IsKeyDown(Enum.KeyCode.A) and 1 or 0)
+                local z=(UIS:IsKeyDown(Enum.KeyCode.W) and 1 or 0)-(UIS:IsKeyDown(Enum.KeyCode.S) and 1 or 0)
+                if x~=0 or z~=0 then direction=camera.CFrame.RightVector*x+camera.CFrame.LookVector*z end
+            end
+        else direction=Vector3.new() end
+        direction=direction+Vector3.new(0,y,0)
+        if direction.Magnitude>1 then direction=direction.Unit end
+        r.AssemblyLinearVelocity=direction*flySpeed
+    end
+end)
+local elapsed=0
+connect(Run.Heartbeat,function(dt)
+    elapsed=elapsed+dt
+    if elapsed<.35 then return end
+    elapsed=0
+    -- Drop destroyed instances from the restore cache.
+    for obj in pairs(changes) do if not obj.Parent then changes[obj]=nil end end
+    if not flags.Outlines then return end
+    local present={}
+    for _,p in ipairs(Players:GetPlayers()) do
+        local c=p.Character
+        if p~=me and c and c.Parent then
+            present[p]=true
+            if highlights[p] and highlights[p].Adornee~=c then highlights[p]:Destroy(); highlights[p]=nil end
+            if not highlights[p] then
+                highlights[p]=make('Highlight',{Adornee=c,FillTransparency=.8,
+                    OutlineTransparency=0,DepthMode=Enum.HighlightDepthMode.AlwaysOnTop},gui)
+            end
+            local color=p.TeamColor.Color
+            highlights[p].FillColor=color; highlights[p].OutlineColor=color
+        end
+    end
+    for p,h in pairs(highlights) do if not present[p] then h:Destroy(); highlights[p]=nil end end
+end)
+local function fit()
+    local camera=workspace.CurrentCamera
+    if not camera then return end
+    local v=camera.ViewportSize
+    scale.Scale=math.min(1,(v.X-24)/560,(v.Y-70)/440)
+    panel.Position=UDim2.fromOffset(math.max(0,(v.X-560*scale.Scale)/2),math.max(0,(v.Y-440*scale.Scale)/2-20))
+end
+local cameraConnection
+local function bindCamera()
+    if cameraConnection then cameraConnection:Disconnect() end
+    local camera=workspace.CurrentCamera
+    if camera then cameraConnection=connect(camera:GetPropertyChangedSignal('ViewportSize'),fit) end
+    fit()
+end
+connect(workspace:GetPropertyChangedSignal('CurrentCamera'),bindCamera)
+bindCamera()
+local dragging, origin, start, dragInput
+connect(header.InputBegan,function(input)
+    if input.UserInputType==Enum.UserInputType.MouseButton1 or input.UserInputType==Enum.UserInputType.Touch then
+        dragging=true; origin=input.Position; start=panel.Position; dragInput=input
+    end
+end)
+connect(UIS.InputEnded,function(input) if input==dragInput then dragging=false end end)
+connect(UIS.InputChanged,function(input)
+    if not dragging then return end
+    if input~=dragInput and input.UserInputType~=Enum.UserInputType.MouseMovement then return end
+    local d=input.Position-origin
+    local camera=workspace.CurrentCamera
+    if not camera then return end
+    local v=camera.ViewportSize
+    panel.Position=UDim2.fromOffset(math.clamp(start.X.Offset+d.X,0,math.max(0,v.X-560*scale.Scale)),
+        math.clamp(start.Y.Offset+d.Y,0,math.max(0,v.Y-48*scale.Scale-40)))
+end)
+local function togglePanel()
+    panel.Visible=not panel.Visible
+    if panel.Visible then
+        local target=scale.Scale
+        scale.Scale=target*.94
+        Tween:Create(scale,TweenInfo.new(.16,Enum.EasingStyle.Quad),{Scale=target}):Play()
+    end
+end
+connect(hide.Activated,togglePanel)
+connect(opener.Activated,togglePanel)
+connect(UIS.InputBegan,function(input,processed)
+    if not processed and input.KeyCode==Enum.KeyCode.RightShift then togglePanel() end
+end)
+filter()
